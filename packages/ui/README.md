@@ -63,7 +63,8 @@ pnpm --filter @pleiades/app exec shadcn add <name>      # writes src/components/
 ```
 
 The command runs in the app, whose `components.json` points here. A package the component needs goes into
-the `catalog` of `pnpm-workspace.yaml` with its version. Then give the component its block on the
+the `catalog` of `pnpm-workspace.yaml` with its exact version: pnpm puts it there itself
+(`catalogMode: strict`). Then give the component its block on the
 [design system page](../../apps/design-system/README.md#a-new-component-gets-its-block): a test there fails
 until it has one.
 

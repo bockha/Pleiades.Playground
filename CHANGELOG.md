@@ -154,6 +154,10 @@ All notable changes are documented here. The format follows
 - `app`: the breadcrumb of the header reads its pages from the routes, as the sidebar does. It named Home
   and the page of a machine by hand, so a new page had none. A page is called by the title of its entry,
   or by `crumb` in the `staticData` of its route; what Home and the page of a machine show is unchanged.
+- pnpm puts a package that is added into the catalog itself, with its exact version, and `catalog:` into
+  the `package.json` (`catalogMode: strict` and an empty `savePrefix` in `pnpm-workspace.yaml`). Before,
+  `pnpm add` and `shadcn add` wrote a version with a `^` into the `package.json`, and moving it into the
+  catalog was a step by hand.
 
 ### Fixed
 
