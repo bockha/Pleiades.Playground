@@ -22,3 +22,4 @@ Short records of decisions that shape the repository, in abbreviated MADR form
 | [0011](0011-a-brand-is-a-block-of-theme-tokens.md) | A brand is a block of theme tokens, switched by one attribute | proposed |
 | [0012](0012-headless-ultimaker-tool-service.md) | Headless Ultimaker 3 slicing and explicit print operations | proposed |
 | [0013](0013-live-values-from-the-broker.md) | Live values reach the browser from the broker | proposed |
+| [0014](0014-a-page-from-the-chat-is-a-recipe-kept-in-the-browser.md) | A page from the chat is a recipe, kept in the browser | proposed |

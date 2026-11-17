@@ -179,6 +179,26 @@ All notable changes are documented here. The format follows
   the line of a call is a `TraceCollapsible` once its result is there, with the result as text in a
   `CodeBlock` (JSON indented). `code-block` is new in `packages/ui`; it brings `shiki`, which only its
   highlighting hook loads, and the app does not use that hook.
+- Pages in the example application: a page is a recipe, a title and its parts, each part a tool of
+  `genui-mcp` with its arguments, kept in the `localStorage` of the browser. Opening a page calls the tools
+  again on the server of the app, only those the chat draws, and draws each answer with the card of the
+  chat: the values of now, no language model. A page is read once, and its head says as of when; only while
+  a part waits for the backend is it read again. A part whose tool the app has no card for stays and says so.
+  `/pages` lists the pages of the browser, and is reached through the breadcrumb; a page is renamed, pinned
+  and deleted from its head. A pinned page stands in the sidebar on the top level, beside Home, and the
+  others stand under it in a group "Pages" that folds, a plain row each, the newest first; with no page to
+  list there is no group. Why: ADR-0014.
+- "Save as page" under an answer of the chat: it keeps all the cards of the answer, in their order, as a page
+  titled with the question, and opens it beside the chat. It needs no language model, the app reads the tool
+  calls from the answer it already has, and it stands only under an answer that has ended and for which the
+  chat drew a card. The row then says "Saved as page" and links to it. An answer with more than 12 cards keeps
+  the first 12 and says so.
+- "Share" in the head of a page: a link that carries the recipe, which answers for which machines and hours,
+  and no value, in one search parameter of `/pages/open` (at most 8,000 characters). Whoever opens it sees the
+  values of now, with no language model and no chat, and keeps the page with "Save to my pages". A link that
+  holds no page says so, and a part without a card in that app says so while the rest of the page is whole.
+  The links of the app now carry only the search that the page they lead to validates (`search.strict`), so
+  the recipe does not follow a person from the page that was opened from a link.
 - The page "Charts" (`/charts`) in the example application: how long each machine was in each state over
   the last hours, as stacked bars, and its state over the last 30 minutes, as a step line per machine. One
   server function, `getCharts`, reads the values over one connection, the spans of the last 30 minutes only.
@@ -251,6 +271,12 @@ All notable changes are documented here. The format follows
   the `package.json` (`catalogMode: strict` and an empty `savePrefix` in `pnpm-workspace.yaml`). Before,
   `pnpm add` and `shadcn add` wrote a version with a `^` into the `package.json`, and moving it into the
   catalog was a step by hand.
+- The chat panel works like a chat app on a phone, a list and a chat with a way back. In a chat the head says
+  what the chat is called, on one line and cut where it is too long: its first question, which the head shows
+  from the moment it is asked. A button "All chats" at the left of the head leads back to the list. The list
+  is the start view, now headed "Chats"; its field begins a new chat. "New chat" is gone from the head of a
+  chat, since it led to the same view the way back leads to. Without a language model the head still says
+  "Chat". After "All chats" or a chat of the list the focus is on the heading of the view it leads to.
 
 ### Fixed
 

@@ -147,6 +147,28 @@ the tool's and the wording is the model's: the card says 6 minutes of running, t
 minutes". The stack had just started, so most of the 8 hours have no data. The card on the left is one minute
 newer than the one in the chat: the page reads again, an answer shows what was true when it was given.
 
+The panel works like a chat app on a phone: a list and a chat, with a way back. The head says what is open. In a
+chat it says the name of the chat, which is its first question, on one line and cut where it is too long; the
+button "All chats" at its left leads back to the list, and the page beside the panel stays where it is. The
+list, headed "Chats", shows the chats so far, and the field at its foot begins a new one, with the questions to
+begin with above it. Close the panel and open it again, and the chat you left is there. The chats are kept in
+the memory of the app's server and are gone when it restarts.
+
+Under an answer that has ended and for which the chat drew a card, the chat offers "Save as page". It keeps all
+the cards of that answer, in their order, as a page titled with your question, and opens the page beside the
+chat, which stays open. No language model is asked: the app reads the tool calls from the answer it already
+has. The page keeps no number and no sentence of the model, so opening it calls the tools again and its cards
+show what holds now. The row under the answer then says "Saved as page" and links to it. An answer without a
+card, such as one in words only, has no button. The group "Pages" in the sidebar lists the pages of this browser
+that are not pinned, the newest first, and a page that is pinned from its head moves to the top of the sidebar,
+beside Home.
+
+A page is private to the browser that keeps it, and the stack has no sign-in, so "Share" in its head gives a
+link that carries the recipe: which answers, for which machines and hours, and no value. Open it in a private
+window to see what a colleague sees: the page with the values of now, no chat and no language model needed,
+and above it "Opened from a link" with "Save to my pages". A part the colleague's app has no card for says so,
+and the rest of the page is whole. A link that was cut off when it was copied says that it holds no page.
+
 The chat needs a language model, and the demo starts without one. Then the panel says "No language model
 configured" and names the missing settings; Home and the machine pages work as before. To configure a model,
 copy `.env.example` to `.env`, set the address and the key of a LiteLLM gateway, at the hackathon the one of the
@@ -190,7 +212,9 @@ writes it down, see [Dictation](../apps/app/README.md#dictation). The picture of
 at the right of the field.
 
 **In the code:** [`apps/app/src/chat/`](../apps/app/src/chat). `chat-sidebar.tsx` is the panel with the model
-picker, `dictate.tsx` the microphone, `assistant.server.ts` the agent harness that talks to the model and calls the tools, `models.ts`
+picker and the head with the way back to the list, `chat-name.ts` what a chat is called,
+`save-as-page.tsx` the row under an answer with "Save as page" (the recipe of an answer is read in
+[`pages/from-answer.ts`](../apps/app/src/pages/from-answer.ts)), `dictate.tsx` the microphone, `assistant.server.ts` the agent harness that talks to the model and calls the tools, `models.ts`
 reads which models the settings name, `cards.tsx` lists what the app draws for which tool, card by card, and
 `suggestions.ts` holds the three questions.
 
