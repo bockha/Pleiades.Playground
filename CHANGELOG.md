@@ -7,6 +7,10 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Example app: the page `/where-is-my-job`, "Where is My Job?", a basis for discussion with made-up data. It
+  shows the shop floor from above, one machine with what it did, does and will do, and one part on its way
+  from programming to packing, as three perspectives of one picture. It reads nothing from the stack and has no
+  entry in the sidebar.
 - Sites API (`sites-api`, port 5540): sites with their halls and the machines placed on them, kept in MongoDB.
   REST reads and writes (writing needs `sites:write`), MCP only reads (`sites_site_list`, `sites_placement_list`).
 - Example app: the setting `APP_MCP_SERVERS` gives the chat the tools of further MCP servers, such as the
