@@ -1,6 +1,7 @@
 import { Link, useLocation, useRouter } from "@tanstack/react-router"
 
 import { versionOf } from "@/components/app-version.ts"
+import { BrandSwitcher } from "@/components/brand-switcher.tsx"
 import { activePage, navPages } from "@/components/nav.ts"
 import { Badge } from "@pleiades/ui/components/badge"
 import {
@@ -35,10 +36,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        {/* The wordmark of umati, from public/. The name of the app stays the title of the page. */}
-        <div className="px-2 py-1.5">
-          <img src="/umati-wordmark.svg" alt="umati" className="h-8 w-auto" />
-        </div>
+        <BrandSwitcher />
         <SidebarMenu>
           {pages.map((page) => (
             <SidebarMenuItem key={page.path}>

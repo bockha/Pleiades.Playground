@@ -126,6 +126,13 @@ All notable changes are documented here. The format follows
 - The example application wears umati: the sign of umati is the icon of the page, and the coloured umati
   wordmark stands at the top of the sidebar in place of the name. Both are trademarks of VDW e.V. and not
   covered by the licences of this repository (`NOTICE`).
+- Brands (`packages/ui/brands`): a brand is a `DESIGN.md` and, written from it, one block of theme tokens
+  that holds while `<html>` carries `data-brand`. It sets the colour roles, the radius, the font and a
+  logo; the colours of an error, a chart and a state of a machine stay the same in every brand, and no
+  component changes. The example application has the switch at the top of its sidebar, the design system
+  the same choice at the top of its page, where the contrast of every colour role is measured under the
+  brand. One brand comes along, `example`, which is not a company. A card served to another host wears no
+  brand. The skill `add-brand` (`.claude/skills/`) leads a coding agent through a new one. Why: ADR-0011.
 - The example application names its build at the bottom of the sidebar: the version and the short commit,
   `0.0.142 · 7a83c2f`, as a link to the commit. The workflow "Images" passes both, and the repository, to the
   image build as `VERSION`, `REVISION` and `SOURCE`; the build reads them as `APP_VERSION`, `APP_REVISION`
