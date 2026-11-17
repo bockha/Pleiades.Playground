@@ -12,6 +12,9 @@ All notable changes are documented here. The format follows
 - Example app: the button "Tools" in the message field of the chat lists the servers that give the chat
   tools, says whether each one answers, and names its tools. A chat switches a further server off and on
   there; the server of the app gives the model no tool of a server that is off.
+- Example app: where no tool answers a question, the chat says that its tools do not show it, not that it
+  does not exist, and where a place fits the question names where to ask, such as the maker of the machine
+  or the maintenance records.
 - Live values: the page `/live` of the example app draws a graph for each physical value over the last 15
   minutes, a line for each machine, and shows one machine or all of them. `genui-mcp` has the tools
   `genui_measurement_list`, the newest value of each quantity for every machine with the measurement card,
