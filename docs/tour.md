@@ -146,6 +146,9 @@ The models in the picture are the ones the gateway of the hackathon lists; yours
 lists for your key, in its order.
 The three questions above are suggestions to begin with.
 
+While an answer comes, send turns into stop: it ends the answer, what came so far stays, and the next
+question can go.
+
 With a speech-to-text model at the gateway, the field also has a microphone: press it, speak, press it
 again, and what was said stands in the field, to send like a typed question. The gateway decides which model
 writes it down, see [Dictation](../apps/app/README.md#dictation). The picture of the answer shows the microphone
