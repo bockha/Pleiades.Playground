@@ -7,6 +7,10 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Live values: the page `/live` of the example app draws a graph for each physical value over the last 15
+  minutes, a line for each machine, and shows one machine or all of them. `genui-mcp` has the tools
+  `genui_measurement_list`, the newest value of each quantity for every machine with the measurement card,
+  and `genui_measurement_series`, the lines of the graphs, which the card file draws below the cards.
 - Optional Ultimaker 3 services: CuraEngine slicing over REST/MCP, printer-side header validation,
   current jobs and history with durable slice associations, and a separate MQTT telemetry adapter.
   Both containers are part of the root Compose stack and image-publication workflow, enabled for
