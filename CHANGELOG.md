@@ -359,6 +359,10 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- Example app: "New chat" is back in the head of the chat panel, as a plus in the list and in every chat. It
+  opens a new chat with no question yet and the cursor in its field; the list stays behind "All chats". After
+  the first question asked in the panel, the field of the new chat keeps the cursor, so the next question
+  follows without a click. In the URL the list is `?chat=all` now, and `?chat=new` is the new chat.
 - Notification card: all notifications or those of one level, errors or warnings, ten a page, those that stand
   first, with the pagination of the energy card; the counts at the head and the sums at the foot follow the level.
 - Time series and energy card: power in kilowatts with an area under its line, a taller graph, and times on full
