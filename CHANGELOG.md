@@ -32,6 +32,12 @@ All notable changes are documented here. The format follows
   that live values work over HTTPS. HTTP stays as it is.
 - Example app: the setting `MQTT_WSS_PATH` sends a page over HTTPS to the broker at that path of the page's
   origin, for a proxy in front of the app that forwards it to the broker.
+- SimpleCAM adapter (`simplecam-adapter-9042`): reads the state of the SimpleCAM machine 9042 from the SSE stream
+  of the SimpleCAM backend and publishes it to the broker as `machines/united-grinding_simplecam_9042/umati/...`
+  after the data model 0.17.1, with the job as the active work master and its progress as a signal of the
+  manufacturer, and a change of its list of alerts as events on `events/notifications`. It is optional: it
+  starts with the Compose profile `simplecam`, and the setting `SIMPLECAM_SSE_URL` names the stream. It is not
+  part of the Margo app.
 - Example app: the page `/where-is-my-job`, "Where is My Job?", a basis for discussion of how an order is
   followed across the shop floor. It shows the machines of the stack from above, one machine with its job
   orders done, running and waiting, and one order on its way: every job order that names the same order

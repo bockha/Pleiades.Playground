@@ -25,7 +25,7 @@ docker compose up -d --build --wait
 
 The command returns when the stack is ready, that is when every container reports healthy: the broker, the
 database, the two APIs with their persistence workers, the Sites API, the generative UI backend, the app, one
-simulator per machine, three cutting machines, each a simulator with its adapter, and the OPC UA adapter with a
+simulator per machine, three cutting machines, each a simulator with its adapter, the OPC UA adapter with a
 simulated OPC UA machine. To see the demo without building it, start it from the published images, see
 [Start](../README.md#start).
 
@@ -78,6 +78,11 @@ and alerts as CloudEvents. It is described in
 T-01 and PU-01, are the `cutting-*` services: a simulator that speaks the telegram protocol of the machine through
 files, and an adapter that reads it and publishes the same tree, below `machines/trumpf_Laser2D_L-01/` and the like
 (see [`Cutting.Adapter`](../source/Pleiades.Playground.Cutting.Adapter/README.md)).
+
+The SimpleCAM machine 9042 is optional: `simplecam-adapter-9042` reads the stream of a SimpleCAM backend that runs
+outside of the stack and publishes the same tree for it, below `machines/united-grinding_simplecam_9042/`. It
+starts only with the Compose profile `simplecam`, as it needs that backend (see
+[`simplecam-adapter-9042`](../apps/simplecam-adapter-9042/README.md)).
 
 The OPC UA machine, `opc-simulator`, is not on Home yet: it is added in the chat, see
 [Add a machine that speaks OPC UA](#add-a-machine-that-speaks-opc-ua).
