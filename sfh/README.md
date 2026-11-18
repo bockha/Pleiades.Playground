@@ -15,8 +15,8 @@ sfh/
 ## How it differs from `compose.yaml`
 
 An SFH app is one Kubernetes pod: all containers share one network namespace and reach each other on
-`127.0.0.1`, not by a service name. The definition runs the twelve containers that `docker compose up` starts
-without a profile:
+`127.0.0.1`, not by a service name. The definition runs the twelve containers of the core stack: broker,
+MongoDB, the APIs and their persistence, the generative UI backend, the example app and the three simulated machines.
 
 - **One port per container.** Every service of this repository listens on 8080 in its image. In one pod they
   would collide, so each one gets a port of its own: `ASPNETCORE_HTTP_PORTS` for the .NET services, `PORT` for
@@ -45,7 +45,7 @@ without a profile:
   from inside the container, `alive.sh`. `run-local.py` probes the pod IP as well.
 - **No exec probe with arguments.** The SFH app-generator HTML-escapes the YAML of a probe, and an argument that
   YAML quotes (`-t`, `1`) then breaks the chart: `helm install` fails with "did not find expected alphabetic or
-  numeric character" ([adapters#776](https://gitlab.com/TRUMPF-corp/sfh/managementplatform/adapters/-/work_items/776)).
+  numeric character", because `'-t'` arrives as `&#39;-t&#39;`. The bug is reported to the SFH team.
   Until it is fixed, the check of the broker and the one of MongoDB that initiates the replica set are scripts in a
   `configMap`, which the generator writes unescaped, and the probe is `["sh", "<script>"]`. Keep `&`, `'`, `<` and
   `>` out of environment values for the same reason.
@@ -60,8 +60,11 @@ without a profile:
   Harbor project of the app with the others.
 - **Memory.** The .NET services use the workstation GC (`DOTNET_gcServer=0`), which needs far less memory in a
   small container.
-- **Left out:** the services behind a profile, `ultimaker-*`, `juicebar-api` and `litellm`, and
-  `extra_hosts`: the chat reaches a language model at the address of `llmBaseUrl`.
+- **Left out:** the services behind a profile, `ultimaker-*`, `juicebar-api` and `litellm`; the cutting machines
+  (`cutting-*`) and OPC UA (`opcua-adapter`, `opc-simulator`), which `compose.yaml` starts as well: the SFH app keeps
+  the three simulated machines of the core stack and takes no further simulator; and `extra_hosts`: the chat
+  reaches a language model at the address of `llmBaseUrl`. Without `OPCUA_MCP_URL` the chat has no OPC UA, and
+  `genui-mcp` finds the Sites API at its default, `http://localhost:5540`, which is where it runs in the pod.
 
 ## Values
 
@@ -78,7 +81,7 @@ Set per deployment through the API.
 
 ```bash
 sfh/build-images.sh 0.2.1-rc2                 # local images under pleiades-sfh/
-~/.claude/skills/sfh-app/scripts/sfh.sh validate sfh/app-definition.json
+~/.claude/skills/sfh-app/scripts/sfh.sh validate sfh/app-definition.json   # offline, with the sfh-app skill
 sfh/run-local.py up                           # the pod on this computer: http://127.0.0.1:5600/
 sfh/run-local.py down
 sfh/push-images.sh core.harbor.smartfactoryhost.com/<project>
