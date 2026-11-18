@@ -1,6 +1,6 @@
 {
-  "semver": "0.2.1-rc0",
-  "changelog": "Pleiades Playground demo stack as an SFH app: three simulated machines, MQTT broker, time series and events in MongoDB, REST and MCP APIs, generative UI backend and the example app with chat.",
+  "semver": "0.2.1-rc1",
+  "changelog": "Works around adapters#776: the probes of broker and MongoDB call scripts from a configMap instead of exec commands with arguments, which the app-generator HTML-escapes. MQTT_WS_URL follows the host of the generated Ingress (sponsorRef and basedomain).",
   "definition": {
     "definitionVersion": "1.2.1",
     "values": [
@@ -47,7 +47,15 @@
         "name": "mosquitto-config",
         "type": "configMap",
         "configMapData": {
-          "mosquitto.conf": "# Demo broker: anonymous access inside the app and on its services.\n# Do not expose this configuration to a network you do not control.\npersistence false\nlog_dest stdout\n\nlistener 1883\nprotocol mqtt\n\nlistener 9001\nprotocol websockets\n\nallow_anonymous true\n"
+          "mosquitto.conf": "# Demo broker: anonymous access inside the app and on its services.\n# Do not expose this configuration to a network you do not control.\npersistence false\nlog_dest stdout\n\nlistener 1883\nprotocol mqtt\n\nlistener 9001\nprotocol websockets\n\nallow_anonymous true\n",
+          "ready.sh": "#!/bin/sh\n# Readiness of the broker: it answers a subscription to its version. A script and not an exec probe with\n# arguments, which the SFH app-generator breaks (adapters#776).\nexec mosquitto_sub -t '$SYS/broker/version' -C 1 -W 3\n"
+        }
+      },
+      {
+        "name": "mongodb-probe",
+        "type": "configMap",
+        "configMapData": {
+          "startup.sh": "#!/bin/sh\n# Passes once MongoDB is the writable primary of its single-node replica set; initiates the set on the\n# first pass. A script and not an exec probe with arguments, which the SFH app-generator breaks (adapters#776).\nHOME=/tmp exec mongosh --quiet --eval \"try { if (!db.hello().isWritablePrimary) throw new Error('not primary') } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27017'}]}); throw e }\"\n"
         }
       }
     ],
@@ -96,13 +104,8 @@
         "readinessProbe": {
           "exec": {
             "command": [
-              "mosquitto_sub",
-              "-t",
-              "$SYS/broker/version",
-              "-C",
-              "1",
-              "-W",
-              "3"
+              "sh",
+              "/mosquitto/config/ready.sh"
             ]
           },
           "initialDelaySeconds": 2,
@@ -143,17 +146,18 @@
           {
             "name": "mongodb-data",
             "mountPath": "/data/db"
+          },
+          {
+            "name": "mongodb-probe",
+            "mountPath": "/etc/pleiades-mongodb",
+            "readOnly": true
           }
         ],
         "startupProbe": {
           "exec": {
             "command": [
-              "env",
-              "HOME=/tmp",
-              "mongosh",
-              "--quiet",
-              "--eval",
-              "try { if (!db.hello().isWritablePrimary) throw new Error('not primary') } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27017'}]}); throw e }"
+              "sh",
+              "/etc/pleiades-mongodb/startup.sh"
             ]
           },
           "initialDelaySeconds": 5,
@@ -179,7 +183,7 @@
       {
         "name": "timeseries-api",
         "image": "pleiades.playground.timeseries.api",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -257,7 +261,7 @@
       {
         "name": "timeseries-persistence",
         "image": "pleiades.playground.timeseries.persistence",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -352,7 +356,7 @@
       {
         "name": "events-api",
         "image": "pleiades.playground.events.api",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -430,7 +434,7 @@
       {
         "name": "events-persistence",
         "image": "pleiades.playground.events.persistence",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -529,7 +533,7 @@
       {
         "name": "sites-api",
         "image": "pleiades.playground.sites.api",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -603,7 +607,7 @@
       {
         "name": "genui-mcp",
         "image": "pleiades.playground.genui.mcp",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -661,7 +665,7 @@
       {
         "name": "app",
         "image": "pleiades.playground.app",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "384Mi",
@@ -700,7 +704,7 @@
           },
           {
             "name": "MQTT_WS_URL",
-            "value": "wss://pleiades-mqtt.{{ .Values.sfhId }}.sfh.edge-device.net"
+            "value": "wss://pleiades-mqtt.{{ .Values.sponsorRef | lower }}.{{ .Values.basedomain }}"
           },
           {
             "name": "LLM_BASE_URL",
@@ -732,7 +736,7 @@
       {
         "name": "simulator-p-04",
         "image": "pleiades.playground.simulator",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -809,7 +813,7 @@
       {
         "name": "simulator-p-07",
         "image": "pleiades.playground.simulator",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -890,7 +894,7 @@
       {
         "name": "simulator-m-02",
         "image": "pleiades.playground.simulator",
-        "tag": "0.2.1-rc0",
+        "tag": "0.2.1-rc1",
         "resources": {
           "requests": {
             "memory": "192Mi",

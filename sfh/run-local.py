@@ -30,14 +30,14 @@ def docker(*args, check=True, capture=False):
 
 
 def render(text, sfh_id, values):
+    # The values the cluster-worker sets at a deployment, as far as a definition uses them.
+    cluster = {"sfhId": sfh_id, "sponsorId": "local", "sponsorRef": "LOCAL", "basedomain": "sfh.edge-device.net"}
+
     def sub(m):
-        key = m.group(1)
-        if key == "sfhId":
-            return sfh_id
-        if key.startswith("app."):
-            return values[key[4:]]
-        return {"sponsorId": "local", "sponsorRef": "local"}[key]
-    return re.sub(r"\{\{\s*\.Values\.([A-Za-z.]+)\s*\}\}", sub, text)
+        key, pipe = m.group(1), m.group(2)
+        value = values[key[4:]] if key.startswith("app.") else cluster[key]
+        return value.lower() if pipe == "lower" else value
+    return re.sub(r"\{\{\s*\.Values\.([A-Za-z.]+)\s*(?:\|\s*(lower)\s*)?\}\}", sub, text)
 
 
 def memory(quantity):

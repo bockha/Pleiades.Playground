@@ -24,8 +24,8 @@ without a profile:
 
   | Container | Port | Reachable |
   |---|---|---|
-  | `app` | 5600 | reverse proxy, `https://pleiades.<sfhId>.sfh.edge-device.net`; App2App 5600 |
-  | `broker` | 1883 (MQTT), 9001 (MQTT over WebSocket) | 9001 by reverse proxy, `wss://pleiades-mqtt.<sfhId>.sfh.edge-device.net`; App2App 1883 and 9001 |
+  | `app` | 5600 | reverse proxy, `https://pleiades.<sponsorRef>.sfh.edge-device.net`; App2App 5600 |
+  | `broker` | 1883 (MQTT), 9001 (MQTT over WebSocket) | 9001 by reverse proxy, `wss://pleiades-mqtt.<sponsorRef>.sfh.edge-device.net`; App2App 1883 and 9001 |
   | `timeseries-api` | 5500 | App2App |
   | `events-api` | 5510 | App2App |
   | `genui-mcp` | 5520 | App2App |
@@ -38,9 +38,17 @@ without a profile:
 - **No `depends_on`.** The containers start together; the services connect again until broker and MongoDB answer.
   The healthcheck of compose that initiates the replica set is the `startupProbe` of `mongodb`.
 - **Probes.** Readiness and liveness of the services are the bare `/health`, not `/healthcheck`: a pod is reachable
-  only while every container is ready, so a dependency probed in one container would take the app down.
+  only while every container is ready, so a dependency probed in one container would take the app down. The workers
+  that only map `/healthcheck` (persistence, simulators) take it as their `startupProbe`, then a TCP check.
+- **No exec probe with arguments.** The SFH app-generator HTML-escapes the YAML of a probe, and an argument that
+  YAML quotes (`-t`, `1`) then breaks the chart: `helm install` fails with "did not find expected alphabetic or
+  numeric character" ([adapters#776](https://gitlab.com/TRUMPF-corp/sfh/managementplatform/adapters/-/work_items/776)).
+  Until it is fixed, the check of the broker and the one of MongoDB that initiates the replica set are scripts in a
+  `configMap`, which the generator writes unescaped, and the probe is `["sh", "<script>"]`. Keep `&`, `'`, `<` and
+  `>` out of environment values for the same reason.
 - **Browser and broker.** The pages hear live values over MQTT over WebSocket. `MQTT_WS_URL` points the browser at
-  the subdomain of the broker's WebSocket.
+  the subdomain of the broker's WebSocket, built the way the generated Ingress builds its host:
+  `pleiades-mqtt.{{ .Values.sponsorRef | lower }}.{{ .Values.basedomain }}`.
 - **Volumes.** MongoDB keeps its data on a persistent volume of 10 GiB. A simulator keeps its counters in an
   `emptyDir`: they survive a restart of the container, not a new pod, as the anonymous volume does in compose.
   The broker configuration is a `configMap`, the same as `stacks/broker/mosquitto.conf`.
@@ -66,7 +74,7 @@ Set per deployment through the API.
 ## Build, check, push
 
 ```bash
-sfh/build-images.sh 0.2.1-rc0                 # local images under pleiades-sfh/
+sfh/build-images.sh 0.2.1-rc1                 # local images under pleiades-sfh/
 ~/.claude/skills/sfh-app/scripts/sfh.sh validate sfh/app-definition.json
 sfh/run-local.py up                           # the pod on this computer: http://127.0.0.1:5600/
 sfh/run-local.py down
