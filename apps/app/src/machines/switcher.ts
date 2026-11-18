@@ -1,4 +1,5 @@
 import type { MachineList, State } from "@pleiades/cards/machine/contract.ts"
+import { titleOf } from "@pleiades/cards/machine/in-words.ts"
 import { stateLabel, stateOf } from "@pleiades/cards/machine/state.ts"
 
 /** The hours of history the page of a machine offers. The backend takes 1 to 24; the page offers three. */
@@ -24,20 +25,21 @@ export function chosenHours(raw: unknown): Hours {
   return hoursOf(raw) ?? DEFAULT_HOURS
 }
 
-/** One entry of the machine switcher: a machine and what it does now. */
-export type Choice = { machine: string; state: State }
+/** One entry of the machine switcher: a machine by its id, what it is called and what it does now. */
+export type Choice = { machine: string; title: string; state: State }
 
 /** The machines of the list, in the order the backend gave them, each with its state. */
 export function choicesOf({ asOf, machines }: MachineList): Array<Choice> {
-  return machines.map((machine) => ({ machine: machine.machine, state: stateOf(machine, asOf) }))
+  return machines.map((machine) => ({ machine: machine.machine, title: titleOf(machine), state: stateOf(machine, asOf) }))
 }
 
 /**
  * Whether a choice answers what was typed. Case does not matter, and every word must be found in
- * the serial number or in the name of the state: "p 0" finds P-04, "alarm" every machine in alarm.
+ * the title, the machine id or the name of the state: "p 0" finds P-04, "alcyone" the machines of
+ * that manufacturer, "alarm" every machine in alarm.
  */
 export function matches(choice: Choice, query: string): boolean {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const text = `${choice.machine} ${stateLabel[choice.state]}`.toLowerCase()
+  const text = `${choice.title} ${choice.machine} ${stateLabel[choice.state]}`.toLowerCase()
   return words.every((word) => text.includes(word))
 }

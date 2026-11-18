@@ -1,4 +1,5 @@
 import type { MachineList } from "@pleiades/cards/machine/contract.ts"
+import { titleOf } from "@pleiades/cards/machine/in-words.ts"
 import { MachineCard } from "@pleiades/cards/machine/machine-card.tsx"
 import { stateLabel } from "@pleiades/cards/machine/state.ts"
 import { StateSymbol } from "@pleiades/cards/machine/state-symbol.tsx"
@@ -101,8 +102,11 @@ function Machine() {
   const choices = useMemo(() => (machines ? choicesOf(machines) : null), [machines])
   useRetry(answer.values === null)
   return (
+    // The title is the machine by its model and serial number, once the backend named them; the
+    // address keeps its id.
     <Page
       machine={machine}
+      title={page ? titleOf(page.show.machine) : undefined}
       choices={choices}
       line={page ? liveness(connected, page.show.asOf) : undefined}
       actions={page && <HistoryHours hours={chosenHours(hours)} />}
@@ -119,12 +123,16 @@ function Machine() {
  */
 function Page({
   machine,
+  title = machine,
   choices,
   line,
   actions,
   children,
 }: {
+  /** The machine id, as the address names the machine. */
   machine?: string
+  /** What the machine is called: its model and serial number, or its id until they are known. */
+  title?: string
   choices?: Array<Choice> | null
   line?: string
   actions?: ReactNode
@@ -136,8 +144,8 @@ function Page({
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
             {/* The button that opens the list gives the heading no name of its content: it is named here. */}
-            <h1 className="text-2xl font-semibold" aria-label={machine}>
-              {choices && choices.length > 0 ? <MachineSwitcher machine={machine} choices={choices} /> : machine}
+            <h1 className="text-2xl font-semibold" aria-label={title}>
+              {choices && choices.length > 0 ? <MachineSwitcher machine={machine} title={title ?? machine} choices={choices} /> : title}
             </h1>
             {line && <p className="text-sm text-muted-foreground">{line}</p>}
           </div>
@@ -155,7 +163,7 @@ function Page({
  * order the backend gave it. A person who picks one goes to its page and keeps the address's
  * other values, the hours and the open chat.
  */
-function MachineSwitcher({ machine, choices }: { machine: string; choices: Array<Choice> }) {
+function MachineSwitcher({ machine, title, choices }: { machine: string; title: string; choices: Array<Choice> }) {
   const navigate = useNavigate()
   return (
     <Combobox
@@ -179,13 +187,13 @@ function MachineSwitcher({ machine, choices }: { machine: string; choices: Array
         render={
           <Button
             variant="ghost"
-            aria-label={`${machine}, switch machine`}
+            aria-label={`${title}, switch machine`}
             // The title keeps the size of a title; the button only makes it one that can be pressed.
             className="-ml-2 h-auto px-2 py-1 text-2xl font-semibold"
           />
         }
       >
-        {machine}
+        {title}
       </ComboboxTrigger>
       <ComboboxContent className="w-72 sm:w-80">
         <ComboboxInput showTrigger={false} placeholder="Find a machine" aria-label="Find a machine" />
@@ -194,7 +202,7 @@ function MachineSwitcher({ machine, choices }: { machine: string; choices: Array
           {(choice: Choice) => (
             <ComboboxItem key={choice.machine} value={choice}>
               <StateSymbol state={choice.state} />
-              {choice.machine}
+              {choice.title}
               <span className="ml-auto text-muted-foreground">{stateLabel[choice.state]}</span>
             </ComboboxItem>
           )}

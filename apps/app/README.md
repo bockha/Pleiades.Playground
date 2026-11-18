@@ -6,7 +6,7 @@ harness.
 
 - **Home** asks "what needs you?": it lists the machines of the demo stack, first those in alarm, stopped or
   without data, then those in setup, then the running ones. It is live: see below.
-- **A page per machine** (`/machines/P-04`) shows the machine card of the
+- **A page per machine** (`/machines/alcyone-machines_AX-400_P-04`, by the machine id) shows the machine card of the
   [card catalogue](../../packages/cards/README.md): what the machine does now and what it did over the last
   hours. It needs no language model. Home leads to it. For a machine the backend does not know, the page
   says so and does not ask again.
@@ -54,8 +54,8 @@ which settings are missing; everything else works.
 **Live, not read again** ([ADR-0013](../../docs/adr/0013-live-values-from-the-broker.md)). Home, the page of a
 machine, Live values and Charts read once, in their loader, what `genui-mcp` knows: what held when the page was opened,
 and the history before it. From then on the browser subscribes at the broker, MQTT over WebSocket, to the
-topics the page shows, and every value appears the moment a machine publishes it: a state, a program, a warning
-that is raised or reset, a point of a graph. The clock of the page moves on by itself, by the clock of the
+topics the page shows, and every value appears the moment a machine publishes it: a state, a work master, the
+job order that runs, an alert that is raised or cleared, a point of a graph. The clock of the page moves on by itself, by the clock of the
 server, so a machine that falls silent shows "No data" after 30 seconds, and the history of a machine keeps its
 length and rolls on to now. A value stamped more than 30 seconds ahead of that clock is left out, as the backend
 would not show it yet either. The line under the title
@@ -124,7 +124,8 @@ With a speech-to-text model at the gateway, the chat field has a microphone. Pre
 again: a spinner shows while the model writes down what was said, and the text goes into the field, after
 what is already there. It is sent like a typed question, when you send it. After two minutes the recording
 stops by itself and is written down the same way. The model hears the language itself. It also gets the
-names of the machines from the backend as its prompt, so that it writes "P-04" as the stack spells it.
+names of the machines from the backend as its prompt, their serial numbers, models and machine ids, so that
+it writes "P-04" as the stack spells it.
 
 Dictation takes the first model the gateway marks for speech to text (`mode: audio_transcription`), at the hub
 of the hackathon `openai/gpt-transcribe`. The gateway passes it on as OpenAI's audio transcriptions

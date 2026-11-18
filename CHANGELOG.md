@@ -13,6 +13,8 @@ All notable changes are documented here. The format follows
   entry in the sidebar.
 - Sites API (`sites-api`, port 5540): sites with their halls and the machines placed on them, kept in MongoDB.
   REST reads and writes (writing needs `sites:write`), MCP only reads (`sites_site_list`, `sites_placement_list`).
+  A placement names its machine by the machine id of the MQTT binding (`machineId`, `/placements/{machineId}`),
+  as every other API does.
 - Example app: the setting `APP_MCP_SERVERS` gives the chat the tools of further MCP servers, such as the
   optional Ultimaker service, as `name=address` separated by commas.
 - Example app: the button "Tools" in the message field of the chat lists the servers that give the chat
@@ -34,8 +36,10 @@ All notable changes are documented here. The format follows
   deployment with COMPOSE_PROFILES=ultimaker.
 - Optional juice bar service `juicebar-api` (Compose profile `juicebar`, port 5550): the card and the state of
   a machine that runs MixerControl over REST and MCP, an order on request, and its state on the broker below
-  `machines/{SerialNumber}/`. It never starts the production; `JUICEBAR_ENABLE_ORDERING=false` makes it
-  read-only.
+  `machines/{MachineId}/`, `unknown_JuiceBar_JUICEBAR-01` by default, with its own values below `oem/JuiceBar/`.
+  It never starts the production; `JUICEBAR_ENABLE_ORDERING=false` makes it read-only. `JUICEBAR_SERIAL_NUMBER`
+  names its serial number, `JUICEBAR_MANUFACTURER`, `JUICEBAR_MANUFACTURER_NAME` and `JUICEBAR_MODEL` the rest
+  of its machine id and its name on the screen.
 
 - Timeseries: API (REST, MCP) and persistence worker (MQTT to API).
 - Events: API (REST, MCP) and persistence worker, for notification events.
@@ -60,7 +64,7 @@ All notable changes are documented here. The format follows
 - Card catalogue `packages/cards`: for each card its contract (zod) and its React component. The first card
   is the machine card: what one machine does now and which states it went through over the last hours. The
   tool `genui_machine_show` returns its values, the app shows it on a page per machine
-  (`/machines/<serial number>`) and in the chat.
+  (`/machines/<machine id>`) and in the chat.
 - The machine tools of `genui-mcp` take a `timeZone` and then write every instant as a local time with its
   offset to UTC. The chat passes the time zone of the browser, so an answer gives the times of the person's
   clock, and it draws the markdown of an answer.
@@ -209,12 +213,62 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- `machines/{machineId}/` carries the umati data model 0.17.1 instead of the binding of the playground
+  ([`contracts/mqtt`](contracts/mqtt/README.md), ADR-0015; [`contracts/datamodel`](contracts/datamodel/README.md)
+  refers to commit `3a799d5`): `umati/Manifest`, `umati/<path>`, `oem/<path>` for the signals of the
+  manufacturer, and CloudEvents on `events/jobs`, `events/workmasters` and `events/notifications`, each topic
+  counting its own `sequence`. Values carry the units of the model, energy in `wattHour` (ADR-0002). The machine
+  id is `<manufacturer>_<model>_<serial number>`, for example `alcyone-machines_AX-400_P-04`.
+- Simulator: a virtual machine publishes this tree: snapshots and lists retained; job orders and their results,
+  program executions and alerts with their NE 107 severity as CloudEvents, not retained, waiting in a bounded
+  outbox while the broker is away; a stack light; `Connection/State` `Initializing`, `Running`,
+  `CommunicationFault` and `Shutdown`. The events of the step that ends a `CommunicationFault` go out after
+  `Running`; only those of the steps meanwhile are lost. Each simulator of the stack has a scenario of its own
+  (`Config:SpecOutput:ScenarioName`: P-04 the default, P-07 `housings`, M-02 `small-parts`) and a made-up
+  manufacturer on a domain below `.example`: Alcyone Machine Works (`alcyone-machines_AX-400_P-04`), Taygeta
+  Precision (`taygeta-precision_TP-800_P-07`) and Merope Microtec (`merope-microtec_MM-120_M-02`). Its tests
+  check every message against the JSON schemas of the model with JsonSchema.Net when a clone of the model lies
+  next to the repository or in `UMATI_DATAMODEL_DIR`. The value and notification generators are gone.
+- The stack reads this tree. A machine is named by its machine id everywhere: in the stores, the APIs, the MCP
+  tools, genui-mcp and the address of its page (`/machines/alcyone-machines_AX-400_P-04`); the app shows its
+  manufacturer, model and serial number from the identification.
+- Timeseries persistence: subscribes to `machines/+/umati/#`, `machines/+/oem/#` and `sites/+/#`, keeps a value
+  with the unit it came with (new in `BaseUnit`: `wattHour`, `piece`, `kilogramPerSecond`), keeps a snapshot
+  such as `State/Status` field by field, and keeps no lists, no `null` and no manifest.
+- Events: the persistence takes `application/cloudevents+json` from `machines/+/events/jobs`, `…/workmasters`
+  and `…/notifications` with QoS 1 in a persistent session (`Config:MqttSource:SessionExpiry`); an event stored
+  before (409, delivered again or retried) counts as stored and is logged on Debug. The Events
+  API keeps the CloudEvents as they came in one collection `MachineEvent`, unique by `source` and `id`. It serves
+  `/machineEvents` (by machine, group, type, correlation id, job order and time) with `/machineEvents/gaps`, `/alerts/active`, `/alerts/pairs` and `/alerts/statistics` (by
+  NE 107 severity), `/jobOrders` with `/jobOrders/{mId}/{jobOrderId}`, and `/programExecutions`, and the MCP
+  tools `events_machine_events_query`, `events_sequence_gaps_query`, `events_active_alerts_query`,
+  `events_alert_pairs_query`, `events_alert_statistics_query`, `events_job_orders_query` and
+  `events_program_executions_query`.
+- The machine card shows the work master instead of the program, the job order that runs, and alerts with their
+  NE 107 severity; a machine whose adapter is not `Running` has no data, since the adapter said so.
+- The measurement card and the Ultimaker telemetry follow this tree: the card takes a machine by its machine id,
+  labels it with its model and serial number, and reads the bearing temperature below `oem/` (energy shows in
+  `Wh`); the telemetry publishes below
+  `machines/ultimaker_UM3_UM3-01/` (`ULTIMAKER_SERIAL_NUMBER` instead of `ULTIMAKER_MACHINE_ID`), its signals
+  below `oem/Ultimaker/`, `State/Status/MachineryItemState`, the adapter states `Running` and
+  `CommunicationFault`, and its identification.
 - `app`: Home, the page of a machine, Live values and Charts are live from the broker (ADR-0013). They read what the
   backend knows once, and then hear every value at the broker, MQTT over WebSocket, the moment it is
   published, instead of reading everything again every ten seconds. The browser must reach the broker's
   WebSocket: `MQTT_WS_PORT` at the host of the page, or `MQTT_WS_URL` behind a proxy. The topics of the
   machine card and the measurement card are in their contracts in `@pleiades/cards` (`READING_PATHS`,
-  `NOTIFICATIONS_PATH`, `QUANTITY_PATHS`), and `genui-mcp` reads the same ones.
+  `NOTIFICATIONS_PATH`, `QUANTITY_PATHS`), and `genui-mcp` reads the same ones. They hear the tree of the data
+  model: the snapshot `State/Status` field by field, as the store keeps it, alerts as CloudEvents, the job order
+  that runs from the retained lists of job orders, and the identification. Values are retained now, so a
+  machine a page has not heard of joins only with a sign of life of the last 24 hours, as the backend lists it.
+- The juice bar and the Margo app follow this tree. The juice bar publishes below
+  `machines/unknown_JuiceBar_JUICEBAR-01/` (`JUICEBAR_SERIAL_NUMBER` instead of `JUICEBAR_MACHINE_ID`; an
+  existing `.env` no longer applies), its own values below `oem/JuiceBar/`, and the adapter states `Running` and
+  `CommunicationFault`. The Margo app runs `sites-api` with two settings for its address and port, stores
+  `machines/+/oem/#`, and gives each simulator its scenario.
+- Simulator: the first events of a start, the first entries of the list of job orders, go out with the first
+  connect, so the count of a group begins at 1; a simulator starts once both persistence services have their
+  subscriptions.
 - `app`, for those who run `main`: the chat takes its models from a LiteLLM gateway, with two settings,
   `LLM_BASE_URL` and `LLM_API_KEY`. The settings `ANTHROPIC_*`, `OPENAI_*`, `OPENAI_TRANSCRIPTION_MODEL`,
   `LLM_MODELS` and `LLM_TRANSCRIPTION_MODEL` and the package `@tanstack/ai-anthropic` are gone. A `.env` that
@@ -280,6 +334,12 @@ All notable changes are documented here. The format follows
   is the start view, now headed "Chats"; its field begins a new chat. "New chat" is gone from the head of a
   chat, since it led to the same view the way back leads to. Without a language model the head still says
   "Chat". After "All chats" or a chat of the list the focus is on the heading of the view it leads to.
+
+### Removed
+
+- `NotificationEventDtoV1`, its collection, the endpoints `/notificationEvents` and the MCP tools
+  `events_notification_*`.
+- The libraries `Pleiades.Playground.Events.Generators` and `Pleiades.Playground.Timeseries.Generators`.
 
 ### Fixed
 
