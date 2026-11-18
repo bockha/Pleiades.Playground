@@ -7,6 +7,23 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- MQTT binding, draft 0.3.0: a third first level, `hub/`, beside `machines` and `sites`. It carries the
+  registration of apps at the Pleiades Hub (repository `umati/pleiades-hub`), the page that shows the apps of
+  a Pleiades system under one header. The binding only reserves the level and says who owns it: the topics
+  below it and their payloads are defined by the contract of the hub. Its messages are not values, so
+  envelope, units and content types do not apply to them. Nothing changes below `machines` and `sites`.
+- The example app registers at the Pleiades Hub. For the server of the app it is opt-in: with
+  `HUB_MQTT_URL` set to the broker, it registers one app when it starts, "Playground", with a description in
+  English and German and an icon of its own, and `HUB_APP_URL` names the address under which a browser
+  reaches the app. Without `HUB_MQTT_URL` nothing connects and the app behaves as before. The demo stack
+  sets both variables: its app registers at the broker of the stack, with the address
+  `http://localhost:5600/`, which follows `APP_PORT`. An empty `HUB_MQTT_URL` in `.env` switches the
+  registration off, and `HUB_APP_URL` there names another address; both stand in `.env.example`. The hub
+  itself is not part of the stack. The SDK of the hub, `@pleiades/hub-sdk`, is not on npmjs.org: it is
+  checked in as a tarball under `vendor/`, and the catalog refers to it with `file:`. ADR-0021 records the
+  decision and the deviation from "npmjs.org is the only registry". The settings are in
+  `apps/app/README.md`. The tarball is version 0.1.2, licensed under Apache-2.0, which brings the guide
+  `register-an-app.md`, and the skill `register-hub-app`, a copy from the hub's repository, leads an agent to it.
 - Example app: machines are added to a site and taken off it on Home, as in the mock. A bar names the machines
   that sent data in the last 24 hours and stand on no site, with "Review and add"; "Add machine" also takes one by
   its id. The menu of a row moves a machine or removes it, and "Undo" in the toast takes a change back.
