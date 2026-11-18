@@ -41,6 +41,12 @@ All notable changes are documented here. The format follows
   simulation.
 - Example app: "Edit" in the head of a kept page moves its parts up and down and removes one, by hand and with
   no language model; "Undo" in the toast puts a removed part back, and the only part of a page stays.
+- Page of a machine: under the title where the machine stands, and below the machine card three sections as the
+  mock has them: Now, live tiles of its power, energy, spindle and feed; Alarms & warnings; Power and energy over
+  the chosen hours. Other hours read the sections again without loading the page again; a section that gets no
+  answer says so and asks again on its own, one question at a time. The page draws the cards without their feet
+  and topic lines, the chat with them. It reads the measurements of its machine only, and the alarms once after a
+  burst of alerts.
 - Notification card: `genui_notification_list` lists the warnings and errors of one machine over the last hours,
   each with when it was raised, when it was cleared and how long it stood, or that it has not gone, and the chat
   draws them with the notification card.
@@ -347,6 +353,13 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- Notification card: all notifications or those of one level, errors or warnings, ten a page, those that stand
+  first, with the pagination of the energy card; the counts at the head and the sums at the foot follow the level.
+- Time series and energy card: power in kilowatts with an area under its line, a taller graph, and times on full
+  hours and quarter hours; the energy table has columns for the meter, kWh, Avg kW and Peak kW. The machine card
+  writes the times under its band. This holds in the chat as well, which draws the same cards.
+- Generative UI backend: `genui_measurement_series` takes an optional `machine`, as `genui_measurement_list` does,
+  and then reads the values and signs of life of that machine only.
 - Example app: Home (`/`) shows where the machines stand, by site and hall; "Needs you" keeps what it showed first.
   The tiles of the running machines are gone. `/sites` leads to `/`.
 - Cutting simulators: their web pages (ports 5611 to 5613) answer on the network too, not only on this
