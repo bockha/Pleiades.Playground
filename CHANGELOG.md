@@ -7,6 +7,12 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Example app: machines are added to a site and taken off it on Home, as in the mock. A bar names the machines
+  that sent data in the last 24 hours and stand on no site, with "Review and add"; "Add machine" also takes one by
+  its id. The menu of a row moves a machine or removes it, and "Undo" in the toast takes a change back.
+  `genui_site_list` counts how many machines on the sites send and how many need someone.
+- Sites API: a write of a site may name a condition. `If-None-Match: *` makes it only where there is none,
+  `If-Match` with the `etag` of the site changes or removes only the site that was read; 412 otherwise.
 - Example app: the drink card of the juice bar. For the result of `juicebar_drinks_list` the chat draws the
   drinks whose bottles do not warn, each in the glass its author chose in the marketplace, filled with its
   colour; a person picks one, and its button orders it at once, without a question of the language model.
