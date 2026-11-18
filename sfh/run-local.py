@@ -5,6 +5,7 @@ Every container joins the network namespace of one holder container, so they rea
 as in the pod, and a port taken twice fails here as it would there. The values are rendered as the SFH renders
 them ({{ .Values.sfhId }}, {{ .Values.app.<name> }}), volumes become Docker volumes, a configMap a read-only
 folder. Probes are emulated once: a startupProbe is run until it passes, then each readinessProbe is checked.
+An exec probe runs in its container; an httpGet or tcpSocket probe goes to the pod IP, as the kubelet sends it.
 
   sfh/run-local.py up   [--prefix pleiades-sfh] [--sfh-id local] [--set name=value ...]
   sfh/run-local.py check
@@ -100,14 +101,21 @@ def up(a):
     return check(a)
 
 
+def pod_ip():
+    """The address of the pod. The kubelet sends an httpGet or tcpSocket probe there, not to 127.0.0.1, so a
+    process that listens on 127.0.0.1 only fails such a probe on the SFH, and here as well."""
+    return docker("inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", HOLDER,
+                  capture=True).stdout.strip()
+
+
 def probe(container, p):
     if "exec" in p:
         r = docker("exec", f"{PROJECT}-{container}", *p["exec"]["command"], check=False, capture=True)
     elif "httpGet" in p:
-        url = f"http://127.0.0.1:{p['httpGet']['port']}{p['httpGet']['path']}"
+        url = f"http://{pod_ip()}:{p['httpGet']['port']}{p['httpGet']['path']}"
         r = docker("exec", HOLDER, "wget", "-qO", "/dev/null", "-T", "5", url, check=False, capture=True)
     else:
-        r = docker("exec", HOLDER, "nc", "-z", "-w", "3", "127.0.0.1", str(p["tcpSocket"]["port"]),
+        r = docker("exec", HOLDER, "nc", "-z", "-w", "3", pod_ip(), str(p["tcpSocket"]["port"]),
                    check=False, capture=True)
     return r.returncode == 0
 

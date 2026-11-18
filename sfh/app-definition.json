@@ -24,7 +24,8 @@
       "name": "mongodb-probe",
       "type": "configMap",
       "configMapData": {
-        "startup.sh": "#!/bin/sh\n# Passes once MongoDB is the writable primary of its single-node replica set; initiates the set on the\n# first pass. A script and not an exec probe with arguments, which the SFH app-generator breaks (adapters#776).\nHOME=/tmp exec mongosh --quiet --eval \"try { if (!db.hello().isWritablePrimary) throw new Error('not primary') } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27017'}]}); throw e }\"\n"
+        "startup.sh": "#!/bin/sh\n# Passes once MongoDB is the writable primary of its single-node replica set; initiates the set on the\n# first pass. A script and not an exec probe with arguments, which the SFH app-generator breaks (adapters#776).\nHOME=/tmp exec mongosh --quiet --eval \"try { if (!db.hello().isWritablePrimary) throw new Error('not primary') } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27017'}]}); throw e }\"\n",
+        "alive.sh": "#!/bin/bash\n# Readiness and liveness of MongoDB: its port answers. MongoDB listens on 127.0.0.1 only, and a tcpSocket probe\n# of the kubelet goes to the pod IP, so the check runs inside the container.\nexec 3<>/dev/tcp/127.0.0.1/27017\n"
       }
     }
   ],
@@ -68,13 +69,13 @@
         "exec": { "command": ["sh", "/etc/pleiades-mongodb/startup.sh"] },
         "initialDelaySeconds": 5, "periodSeconds": 5, "timeoutSeconds": 10, "failureThreshold": 60
       },
-      "readinessProbe": { "tcpSocket": { "port": 27017 }, "periodSeconds": 10, "failureThreshold": 3 },
-      "livenessProbe": { "tcpSocket": { "port": 27017 }, "periodSeconds": 20, "failureThreshold": 3 }
+      "readinessProbe": { "exec": { "command": ["bash", "/etc/pleiades-mongodb/alive.sh"] }, "periodSeconds": 10, "timeoutSeconds": 5, "failureThreshold": 3 },
+      "livenessProbe": { "exec": { "command": ["bash", "/etc/pleiades-mongodb/alive.sh"] }, "periodSeconds": 20, "timeoutSeconds": 5, "failureThreshold": 3 }
     },
     {
       "name": "timeseries-api",
       "image": "pleiades.playground.timeseries.api",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "256Mi", "cpu": "10m" }, "limits": { "memory": "256Mi" } },
       "ports": [{ "name": "timeseries-api", "containerPort": 5500, "service": { "app2appPort": 5500 } }],
       "environment": [
@@ -94,7 +95,7 @@
     {
       "name": "timeseries-persistence",
       "image": "pleiades.playground.timeseries.persistence",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "192Mi", "cpu": "10m" }, "limits": { "memory": "192Mi" } },
       "environment": [
         { "name": "ASPNETCORE_HTTP_PORTS", "value": "5501" },
@@ -119,7 +120,7 @@
     {
       "name": "events-api",
       "image": "pleiades.playground.events.api",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "256Mi", "cpu": "10m" }, "limits": { "memory": "256Mi" } },
       "ports": [{ "name": "events-api", "containerPort": 5510, "service": { "app2appPort": 5510 } }],
       "environment": [
@@ -139,7 +140,7 @@
     {
       "name": "events-persistence",
       "image": "pleiades.playground.events.persistence",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "192Mi", "cpu": "10m" }, "limits": { "memory": "192Mi" } },
       "environment": [
         { "name": "ASPNETCORE_HTTP_PORTS", "value": "5511" },
@@ -165,7 +166,7 @@
     {
       "name": "sites-api",
       "image": "pleiades.playground.sites.api",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "256Mi", "cpu": "10m" }, "limits": { "memory": "256Mi" } },
       "ports": [{ "name": "sites-api", "containerPort": 5540, "service": { "app2appPort": 5540 } }],
       "environment": [
@@ -184,7 +185,7 @@
     {
       "name": "genui-mcp",
       "image": "pleiades.playground.genui.mcp",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "256Mi", "cpu": "10m" }, "limits": { "memory": "256Mi" } },
       "ports": [{ "name": "genui-mcp", "containerPort": 5520, "service": { "app2appPort": 5520 } }],
       "environment": [
@@ -199,7 +200,7 @@
     {
       "name": "app",
       "image": "pleiades.playground.app",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "384Mi", "cpu": "10m" }, "limits": { "memory": "384Mi" } },
       "ports": [
         {
@@ -225,7 +226,7 @@
     {
       "name": "simulator-p-04",
       "image": "pleiades.playground.simulator",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "192Mi", "cpu": "10m" }, "limits": { "memory": "192Mi" } },
       "environment": [
         { "name": "ASPNETCORE_HTTP_PORTS", "value": "5701" },
@@ -245,7 +246,7 @@
     {
       "name": "simulator-p-07",
       "image": "pleiades.playground.simulator",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "192Mi", "cpu": "10m" }, "limits": { "memory": "192Mi" } },
       "environment": [
         { "name": "ASPNETCORE_HTTP_PORTS", "value": "5702" },
@@ -266,7 +267,7 @@
     {
       "name": "simulator-m-02",
       "image": "pleiades.playground.simulator",
-      "tag": "0.2.1-rc1",
+      "tag": "0.2.1-rc2",
       "resources": { "requests": { "memory": "192Mi", "cpu": "10m" }, "limits": { "memory": "192Mi" } },
       "environment": [
         { "name": "ASPNETCORE_HTTP_PORTS", "value": "5703" },

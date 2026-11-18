@@ -40,6 +40,9 @@ without a profile:
 - **Probes.** Readiness and liveness of the services are the bare `/health`, not `/healthcheck`: a pod is reachable
   only while every container is ready, so a dependency probed in one container would take the app down. The workers
   that only map `/healthcheck` (persistence, simulators) take it as their `startupProbe`, then a TCP check.
+  The kubelet sends an `httpGet` or `tcpSocket` probe to the pod IP, not to `127.0.0.1`. MongoDB listens on
+  `127.0.0.1` only, so nothing outside the pod reaches it; its readiness and liveness are therefore an exec check
+  from inside the container, `alive.sh`. `run-local.py` probes the pod IP as well.
 - **No exec probe with arguments.** The SFH app-generator HTML-escapes the YAML of a probe, and an argument that
   YAML quotes (`-t`, `1`) then breaks the chart: `helm install` fails with "did not find expected alphabetic or
   numeric character" ([adapters#776](https://gitlab.com/TRUMPF-corp/sfh/managementplatform/adapters/-/work_items/776)).
@@ -74,7 +77,7 @@ Set per deployment through the API.
 ## Build, check, push
 
 ```bash
-sfh/build-images.sh 0.2.1-rc1                 # local images under pleiades-sfh/
+sfh/build-images.sh 0.2.1-rc2                 # local images under pleiades-sfh/
 ~/.claude/skills/sfh-app/scripts/sfh.sh validate sfh/app-definition.json
 sfh/run-local.py up                           # the pod on this computer: http://127.0.0.1:5600/
 sfh/run-local.py down
