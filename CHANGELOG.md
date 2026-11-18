@@ -7,10 +7,10 @@ All notable changes are documented here. The format follows
 
 ### Added
 
-- SFH app: the core stack (broker, MongoDB, APIs, persistence, generative UI backend, example app and the three
-  simulated machines) as an app of the Smart Factory Host, one AppDefinition 1.2.1 in [`sfh/`](sfh/README.md), with
+- SFH app: the core stack without simulators (broker, MongoDB, APIs, persistence, generative UI backend and
+  example app) as an app of the Smart Factory Host, one AppDefinition 1.2.1 in [`sfh/`](sfh/README.md), with
   scripts that build and push its images and run it on this computer as one pod. The app is served by the
-  reverse proxy of the SFH, the broker's WebSocket included; cutting machines and OPC UA are left out.
+  reverse proxy of the SFH, the broker's WebSocket included; it shows the machines that publish to its broker.
 - Margo app: Traefik serves the example app over HTTPS as well (setting *HTTPS port of Traefik*, 443), with the
   self-signed certificate it generates itself, and forwards `/mqtt` of that port to the broker's WebSocket, so
   that live values work over HTTPS. HTTP stays as it is.

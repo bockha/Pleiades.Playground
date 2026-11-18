@@ -21,7 +21,6 @@ IMAGES=(
   "pleiades.playground.events.api|source/Pleiades.Playground.Events.Api/Dockerfile|source"
   "pleiades.playground.events.persistence|source/Pleiades.Playground.Events.Persistence/Dockerfile|source"
   "pleiades.playground.sites.api|source/Pleiades.Playground.Sites.Api/Dockerfile|source"
-  "pleiades.playground.simulator|source/Pleiades.Playground.Simulator/Dockerfile|source"
   "pleiades.playground.genui.mcp|apps/genui-mcp/Dockerfile|."
   "pleiades.playground.app|apps/app/Dockerfile|."
 )

@@ -1,6 +1,6 @@
 {
-  "semver": "0.2.1-rc2",
-  "changelog": "MongoDB no longer restarts in a loop: its readiness and liveness are an exec check inside the container, since MongoDB listens on 127.0.0.1 only and a tcpSocket probe goes to the pod IP. Keeps the workaround for adapters#776.",
+  "semver": "0.2.1-rc3",
+  "changelog": "No simulators: the app shows the machines that publish to its broker. The broker's MQTT ports 1883 and 9001 are hostPorts of the SFH, so machines and adapters in its network reach it.",
   "definition": {
     "definitionVersion": "1.2.1",
     "values": [
@@ -30,18 +30,6 @@
         "name": "mongodb-data",
         "type": "persistent",
         "capacity": "10Gi"
-      },
-      {
-        "name": "sim-p04-data",
-        "type": "emptyDir"
-      },
-      {
-        "name": "sim-p07-data",
-        "type": "emptyDir"
-      },
-      {
-        "name": "sim-m02-data",
-        "type": "emptyDir"
       },
       {
         "name": "mosquitto-config",
@@ -78,6 +66,7 @@
           {
             "name": "mqtt",
             "containerPort": 1883,
+            "hostPort": 1883,
             "service": {
               "app2appPort": 1883
             }
@@ -85,6 +74,7 @@
           {
             "name": "mqtt-ws",
             "containerPort": 9001,
+            "hostPort": 9001,
             "service": {
               "app2appPort": 9001,
               "reverseProxy": {
@@ -192,7 +182,7 @@
       {
         "name": "timeseries-api",
         "image": "pleiades.playground.timeseries.api",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -270,7 +260,7 @@
       {
         "name": "timeseries-persistence",
         "image": "pleiades.playground.timeseries.persistence",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -365,7 +355,7 @@
       {
         "name": "events-api",
         "image": "pleiades.playground.events.api",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -443,7 +433,7 @@
       {
         "name": "events-persistence",
         "image": "pleiades.playground.events.persistence",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -542,7 +532,7 @@
       {
         "name": "sites-api",
         "image": "pleiades.playground.sites.api",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -616,7 +606,7 @@
       {
         "name": "genui-mcp",
         "image": "pleiades.playground.genui.mcp",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -674,7 +664,7 @@
       {
         "name": "app",
         "image": "pleiades.playground.app",
-        "tag": "0.2.1-rc2",
+        "tag": "0.2.1-rc3",
         "resources": {
           "requests": {
             "memory": "384Mi",
@@ -738,245 +728,6 @@
             "port": 5600
           },
           "initialDelaySeconds": 15,
-          "periodSeconds": 20,
-          "failureThreshold": 3
-        }
-      },
-      {
-        "name": "simulator-p-04",
-        "image": "pleiades.playground.simulator",
-        "tag": "0.2.1-rc2",
-        "resources": {
-          "requests": {
-            "memory": "192Mi",
-            "cpu": "10m"
-          },
-          "limits": {
-            "memory": "192Mi"
-          }
-        },
-        "environment": [
-          {
-            "name": "ASPNETCORE_HTTP_PORTS",
-            "value": "5701"
-          },
-          {
-            "name": "DOTNET_gcServer",
-            "value": "0"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Name",
-            "value": "demo"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Enabled",
-            "value": "false"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Uri",
-            "value": "http://localhost:3100"
-          },
-          {
-            "name": "Config__SerialNumber",
-            "value": "P-04"
-          },
-          {
-            "name": "Config__MqttDestination__ConnectionString",
-            "value": "mqtt://127.0.0.1:1883"
-          },
-          {
-            "name": "Config__MqttDestination__ClientId",
-            "value": "simulator-p-04"
-          }
-        ],
-        "volumeMounts": [
-          {
-            "name": "sim-p04-data",
-            "mountPath": "/data"
-          }
-        ],
-        "startupProbe": {
-          "httpGet": {
-            "path": "/healthcheck",
-            "port": 5701
-          },
-          "initialDelaySeconds": 5,
-          "periodSeconds": 5,
-          "timeoutSeconds": 5,
-          "failureThreshold": 60
-        },
-        "readinessProbe": {
-          "tcpSocket": {
-            "port": 5701
-          },
-          "periodSeconds": 10
-        },
-        "livenessProbe": {
-          "tcpSocket": {
-            "port": 5701
-          },
-          "periodSeconds": 20,
-          "failureThreshold": 3
-        }
-      },
-      {
-        "name": "simulator-p-07",
-        "image": "pleiades.playground.simulator",
-        "tag": "0.2.1-rc2",
-        "resources": {
-          "requests": {
-            "memory": "192Mi",
-            "cpu": "10m"
-          },
-          "limits": {
-            "memory": "192Mi"
-          }
-        },
-        "environment": [
-          {
-            "name": "ASPNETCORE_HTTP_PORTS",
-            "value": "5702"
-          },
-          {
-            "name": "DOTNET_gcServer",
-            "value": "0"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Name",
-            "value": "demo"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Enabled",
-            "value": "false"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Uri",
-            "value": "http://localhost:3100"
-          },
-          {
-            "name": "Config__SerialNumber",
-            "value": "P-07"
-          },
-          {
-            "name": "Config__MqttDestination__ConnectionString",
-            "value": "mqtt://127.0.0.1:1883"
-          },
-          {
-            "name": "Config__MqttDestination__ClientId",
-            "value": "simulator-p-07"
-          },
-          {
-            "name": "Config__SpecOutput__ScenarioName",
-            "value": "housings"
-          }
-        ],
-        "volumeMounts": [
-          {
-            "name": "sim-p07-data",
-            "mountPath": "/data"
-          }
-        ],
-        "startupProbe": {
-          "httpGet": {
-            "path": "/healthcheck",
-            "port": 5702
-          },
-          "initialDelaySeconds": 5,
-          "periodSeconds": 5,
-          "timeoutSeconds": 5,
-          "failureThreshold": 60
-        },
-        "readinessProbe": {
-          "tcpSocket": {
-            "port": 5702
-          },
-          "periodSeconds": 10
-        },
-        "livenessProbe": {
-          "tcpSocket": {
-            "port": 5702
-          },
-          "periodSeconds": 20,
-          "failureThreshold": 3
-        }
-      },
-      {
-        "name": "simulator-m-02",
-        "image": "pleiades.playground.simulator",
-        "tag": "0.2.1-rc2",
-        "resources": {
-          "requests": {
-            "memory": "192Mi",
-            "cpu": "10m"
-          },
-          "limits": {
-            "memory": "192Mi"
-          }
-        },
-        "environment": [
-          {
-            "name": "ASPNETCORE_HTTP_PORTS",
-            "value": "5703"
-          },
-          {
-            "name": "DOTNET_gcServer",
-            "value": "0"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Name",
-            "value": "demo"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Enabled",
-            "value": "false"
-          },
-          {
-            "name": "Config__Loki__Sinks__0__Uri",
-            "value": "http://localhost:3100"
-          },
-          {
-            "name": "Config__SerialNumber",
-            "value": "M-02"
-          },
-          {
-            "name": "Config__MqttDestination__ConnectionString",
-            "value": "mqtt://127.0.0.1:1883"
-          },
-          {
-            "name": "Config__MqttDestination__ClientId",
-            "value": "simulator-m-02"
-          },
-          {
-            "name": "Config__SpecOutput__ScenarioName",
-            "value": "small-parts"
-          }
-        ],
-        "volumeMounts": [
-          {
-            "name": "sim-m02-data",
-            "mountPath": "/data"
-          }
-        ],
-        "startupProbe": {
-          "httpGet": {
-            "path": "/healthcheck",
-            "port": 5703
-          },
-          "initialDelaySeconds": 5,
-          "periodSeconds": 5,
-          "timeoutSeconds": 5,
-          "failureThreshold": 60
-        },
-        "readinessProbe": {
-          "tcpSocket": {
-            "port": 5703
-          },
-          "periodSeconds": 10
-        },
-        "livenessProbe": {
-          "tcpSocket": {
-            "port": 5703
-          },
           "periodSeconds": 20,
           "failureThreshold": 3
         }
