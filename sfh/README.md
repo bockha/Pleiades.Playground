@@ -66,7 +66,7 @@ Set per deployment through the API.
 ## Build, check, push
 
 ```bash
-sfh/build-images.sh 0.3.0-rc1                 # local images under pleiades-sfh/
+sfh/build-images.sh 0.2.1-rc0                 # local images under pleiades-sfh/
 ~/.claude/skills/sfh-app/scripts/sfh.sh validate sfh/app-definition.json
 sfh/run-local.py up                           # the pod on this computer: http://127.0.0.1:5600/
 sfh/run-local.py down

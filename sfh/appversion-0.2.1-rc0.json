@@ -1,5 +1,5 @@
 {
-  "semver": "0.3.0-rc1",
+  "semver": "0.2.1-rc0",
   "changelog": "Pleiades Playground demo stack as an SFH app: three simulated machines, MQTT broker, time series and events in MongoDB, REST and MCP APIs, generative UI backend and the example app with chat.",
   "definition": {
     "definitionVersion": "1.2.1",
@@ -179,7 +179,7 @@
       {
         "name": "timeseries-api",
         "image": "pleiades.playground.timeseries.api",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -257,7 +257,7 @@
       {
         "name": "timeseries-persistence",
         "image": "pleiades.playground.timeseries.persistence",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -352,7 +352,7 @@
       {
         "name": "events-api",
         "image": "pleiades.playground.events.api",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -430,7 +430,7 @@
       {
         "name": "events-persistence",
         "image": "pleiades.playground.events.persistence",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -529,7 +529,7 @@
       {
         "name": "sites-api",
         "image": "pleiades.playground.sites.api",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -603,7 +603,7 @@
       {
         "name": "genui-mcp",
         "image": "pleiades.playground.genui.mcp",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "256Mi",
@@ -661,7 +661,7 @@
       {
         "name": "app",
         "image": "pleiades.playground.app",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "384Mi",
@@ -732,7 +732,7 @@
       {
         "name": "simulator-p-04",
         "image": "pleiades.playground.simulator",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -809,7 +809,7 @@
       {
         "name": "simulator-p-07",
         "image": "pleiades.playground.simulator",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "192Mi",
@@ -890,7 +890,7 @@
       {
         "name": "simulator-m-02",
         "image": "pleiades.playground.simulator",
-        "tag": "0.3.0-rc1",
+        "tag": "0.2.1-rc0",
         "resources": {
           "requests": {
             "memory": "192Mi",
