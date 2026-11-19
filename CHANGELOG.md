@@ -7,6 +7,7 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Documentation answer and conflict cards with verbatim warnings, independently linked safety pages, package-wide source review and PDF quote highlighting.
 - Example app: a machine added over OPC UA in the chat goes on a site too, so Home shows it: on the only
   site there is, or on the one a person chooses on the proposal where there are several. A toast says it,
   "A1121O0001 added · North plant", as Home does for a machine it puts on a site. Where there is no site, or
@@ -434,6 +435,7 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- Documentation answers use cards exclusively; retired the previous prose/source-list presentation.
 - Machine page: while it opens, every part shows a grey placeholder of its form and size, so nothing moves when
   the values come. The tiles of now stand without a card around them, and the machine card leaves out the line
   that only repeats what the control reports. A machine on a site that sent nothing for 24 hours shows
@@ -633,6 +635,7 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- PDF viewer now supports continuous scrolling and readable native-text highlights that stay aligned through zoom and resize.
 - Example app, showcase TruLaser: `/trulaser` without a machine shows the TruLaser alive most recently, not the first
   by name. A machine that was renamed or stopped kept the page on its old values for a day.
 - Example app: `/discover` takes a mistyped or shortened address as the address it is. `opc.tcp//host:port`
