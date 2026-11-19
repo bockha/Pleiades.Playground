@@ -456,7 +456,11 @@ All notable changes are documented here. The format follows
 - Example app: Live values with all machines shows only the graphs of a value some machine published, and
   next to the title of a graph at most one value of now, where a single machine measures it; more stand
   only as lines. Where machines are there and none published such a value, the page says so. With one machine
-  chosen, the page is as before.
+  chosen, it shows every signal that machine published in the last 24 hours, a number or a yes or no, found
+  anew each time the machine is chosen (`genui_timeseries_signals`), each in a graph of its own over the last
+  15 minutes with its newest value, live from the broker. A machine without any value keeps the graphs as
+  before. Every graph has a button at its top right that shows it enlarged over the page, still live; the X
+  at the top right of the enlarged graph closes it.
 - Example app: "New chat" is back in the head of the chat panel, as a plus in the list and in every chat. It
   opens a new chat with no question yet and the cursor in its field; the list stays behind "All chats". After
   the first question asked in the panel, the field of the new chat keeps the cursor, so the next question
