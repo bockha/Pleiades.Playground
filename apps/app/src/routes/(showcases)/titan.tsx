@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { Kbd } from "@pleiades/ui/components/kbd"
 import { SparklesIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -35,7 +35,8 @@ import { FocusView } from "@/showcases/titan/focus-view.tsx"
 import { asksToSee, unbroken } from "@/showcases/titan/words.ts"
 import { Cloud } from "@/showcases/titan/voice/cloud.tsx"
 
-// Titan: a black screen with a cloud of points that greets, listens and speaks, and nothing else.
+// Titan: a dark panel with a cloud of points that greets, listens and speaks, and nothing else. It stands
+// in the frame of the app like every other page, so the sidebar leads to it and away from it.
 //
 // - The first press of the space bar or a click starts Titan and greets: a browser speaks only after
 //   a key or a click.
@@ -54,7 +55,8 @@ import { Cloud } from "@/showcases/titan/voice/cloud.tsx"
 //   escalation (titan/escalation-view.tsx): red what stands, amber what to do before a machine fails.
 //   Everything that comes and goes, what Titan heard, a problem, the pause, is one quiet line at the
 //   bottom, so no text appears anywhere else.
-// - Escape leaves the screen.
+// - The keys are Titan's while nothing is being typed: in the field of the chat or of the search, the
+//   space bar and P are letters.
 //
 // Everything Titan hears and says goes through the gateway of the chat and nowhere else: the recording
 // to its transcription model, the conversation to a chat model, the sentences to its speech model.
@@ -104,7 +106,8 @@ const said: Record<VoiceState, string> = {
 }
 
 function Assistant() {
-  const navigate = useNavigate()
+  /** Titan's panel: a click on it starts Titan, a click elsewhere in the app does not. */
+  const panel = useRef<HTMLDivElement>(null)
   const state = useVoiceState()
   const { cards, briefing, question } = useShown()
   const inFront = useTabInFront()
@@ -297,12 +300,24 @@ function Assistant() {
 
     const onClick = () => void start()
 
+    // The app around Titan has fields to type in: there a key is a letter, not Titan's.
+    const typing = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : undefined
+      return target !== undefined && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+    }
+
+    // Nor is a key Titan's that the app already took, or that is pressed on one of the app's own
+    // controls outside the panel: the space bar on a button presses that button, in a menu it chooses.
+    // A link is not among them: the focus stays on the link in the sidebar that led here, and from
+    // there the space bar starts Titan.
+    const CONTROLS =
+      "button,summary,[role=button],[role=menu],[role=menuitem],[role=listbox],[role=option],[role=dialog],[role=tab],[role=checkbox],[role=switch],[role=radio]"
+    const elsewhere = (event: KeyboardEvent) =>
+      event.defaultPrevented ||
+      (event.target instanceof Element && !panel.current?.contains(event.target) && event.target.closest(CONTROLS) !== null)
+
     const onDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        stopSpeaking()
-        void navigate({ to: "/", search: (previous) => previous })
-        return
-      }
+      if (typing(event) || elsewhere(event) || event.ctrlKey || event.metaKey || event.altKey) return
       if (event.key.toLowerCase() === "p" && greeted.current && !latest.current.paused) {
         actions.current.pause()
         return
@@ -350,6 +365,8 @@ function Assistant() {
 
     const onUp = (event: KeyboardEvent) => {
       if (event.code !== "Space") return
+      // A key that went down for Titan also comes up for it, wherever the focus is by then.
+      if ((typing(event) || elsewhere(event)) && !holding.current) return
       event.preventDefault()
       const wasHolding = holding.current
       holding.current = false
@@ -361,15 +378,16 @@ function Assistant() {
 
     window.addEventListener("keydown", onDown)
     window.addEventListener("keyup", onUp)
-    window.addEventListener("click", onClick)
+    const element = panel.current
+    element?.addEventListener("click", onClick)
     window.addEventListener("blur", onBlur)
     return () => {
       window.removeEventListener("blur", onBlur)
       window.removeEventListener("keydown", onDown)
       window.removeEventListener("keyup", onUp)
-      window.removeEventListener("click", onClick)
+      element?.removeEventListener("click", onClick)
     }
-  }, [navigate])
+  }, [])
 
   const escalations = useMemo(() => list && escalationsOf(list), [list])
 
@@ -394,21 +412,22 @@ function Assistant() {
     (wakeReady ? "„Hey Titan“ sagen, oder die Leertaste halten und sprechen. P pausiert." : undefined)
 
   return (
-    // The whole screen, over the app, dark. Before the start, and between questions, the cloud and the
+    // A dark panel that fills the page, in the frame of the app: as high as the window below the bar of
+    // the app, so nothing scrolls. Before the start, and between questions, the cloud and the
     // greeting. Once started, the escalation in one slim line on top. With a question: the focus below
     // it, the cloud large and faint behind it, and at the bottom one line for what comes and goes.
-    <div className="titan-night fixed inset-0 z-50 flex flex-col bg-black text-foreground">
+    <div ref={panel} className="titan-night relative flex h-[calc(100svh-6.5rem)] min-h-96 flex-col overflow-hidden rounded-xl bg-black text-foreground">
       {started && escalations && <EscalationView escalations={escalations} />}
       <div className="flex min-h-0 flex-1">
         <div className="relative flex min-w-0 flex-1">
         {/* With something in focus, the cloud steps back: large, faint and pulsing behind it, so
             Titan is still there and still shows whether it listens, thinks or speaks. */}
         {started && focused && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-50 motion-safe:duration-700">
+          <div className="pointer-events-none absolute inset-0 grid [container-type:size] place-items-center overflow-hidden motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-50 motion-safe:duration-700">
             <Cloud
               state={state}
               alarm={alarmed.length > 0}
-              className={`size-[min(95vh,95%)] motion-safe:animate-pulse ${paused ? "opacity-10" : "opacity-25"}`}
+              className={`size-[95cqmin] motion-safe:animate-pulse ${paused ? "opacity-10" : "opacity-25"}`}
             />
           </div>
         )}
