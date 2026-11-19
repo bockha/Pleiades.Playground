@@ -7,6 +7,13 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Example app: the showcase page `/trulaser`, a cockpit of a TRUMPF laser cutting machine named as the umati
+  data model names it: `State.Status` with `Notification.ActiveAlerts` and its history on one time axis, the
+  `JobOrder` with its `ProgramExecution`, and from the TRUMPF extension (`oem/Dalle/`) the requests of the
+  automation devices, the laser technology, the collision data and the condition guide. Each card says whether
+  it shows the model or the extension. Only a build with `APP_SHOWCASES` has it; it reads the Timeseries API
+  and the Events API from the server of the app, which gets `TIMESERIES_API_URL` and `EVENTS_API_URL` for
+  it, and nothing outside `apps/app/src/showcases/trulaser/` and its route changed.
 - Sites API, generative UI backend and example app: a machine has a position in its hall, and the page
   `/halls` draws every hall as a plan seen from above. `PUT /placements/{machineId}/position` takes the middle
   of the machine, `x` and `y` in metre from the upper left corner of the plan, and `DELETE` takes it away; the
