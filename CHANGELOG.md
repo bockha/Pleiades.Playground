@@ -7,6 +7,10 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Example app: the chat adds machines and makes sites and halls. Asked for it, the language model proposes with
+  `app_placement_propose`, and the chat draws a card that asks step by step for what is missing (which machine,
+  where) and writes only when a person confirms, with the server functions and the undo of Home
+  ([ADR-0026](docs/adr/0026-the-chat-proposes-where-a-machine-stands.md)).
 - Generative UI backend and cards: the job order card. `genui_job_order_show` shows the job order of one
   machine (`JobMonitoring.JobOrders` with its result) and its program execution
   (`WorkMasterMonitoring.ProgramExecution`) by the names of the umati data model, from the Events API; the
