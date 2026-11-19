@@ -413,6 +413,9 @@ All notable changes are documented here. The format follows
   attribute of all candidates in one call and uses it to choose between them, to tell what a node of the maker
   means, and as the unit of a node without `EngineeringUnits`. A description that contradicts the element, or
   disagrees with the `EngineeringUnits`, makes the match `Unclear`.
+- The brand TRUMPF (`packages/ui/brands/trumpf`): the colours, square corners and Open Sans of the TRUMPF
+  UX UI Community design system. Its `DESIGN.md` names what the design system asks for that a brand
+  cannot do.
 
 ### Changed
 
