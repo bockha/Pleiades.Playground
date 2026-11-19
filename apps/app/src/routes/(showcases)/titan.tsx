@@ -9,7 +9,10 @@ import "@/showcases/titan/titan.css"
 import {
   canListen,
   closeMicrophone,
+  closeSound,
   listen,
+  onSoundProblem,
+  openSound,
   remembering,
   sayNext,
   setSentenceVoice,
@@ -177,12 +180,18 @@ function Assistant() {
   useEffect(() => {
     if (!inFront) stopSpeaking()
   }, [inFront])
+  // A browser that plays no sound says so in the line at the bottom, instead of Titan answering in silence.
+  useEffect(() => {
+    onSoundProblem((problem) => setProblem((shown) => (problem ?? (shown?.startsWith("Der Browser spielt keinen Ton") ? undefined : shown))))
+    return () => onSoundProblem(undefined)
+  }, [])
   // The page is left: nothing sounds on, and the microphone is let go.
   useEffect(
     () => () => {
       setVoiceEnabled(false)
       stopSpeaking()
       closeMicrophone()
+      closeSound()
     },
     [],
   )
@@ -292,6 +301,8 @@ function Assistant() {
 
   useEffect(() => {
     const start = () => {
+      // Every click and every press of the space bar opens the sound again: a browser allows it only then.
+      openSound()
       if (greeted.current) return false
       greeted.current = true
       setStarted(true)
