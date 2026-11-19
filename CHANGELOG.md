@@ -567,6 +567,13 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- `opcua-adapter`: a rejected certificate is reported with its reason instead of a timeout. A server whose
+  certificate does not carry the ApplicationUri it announces was told in the chat as "did not open a session
+  within 30 seconds"; the reason was only in the log. A connect now stops on the first certificate error and
+  says the status and why, for example `BadCertificateUriInvalid`, in the chat, the REST API and `lastError`.
+  A server that refuses the adapter with `BadSecurityChecksFailed` is told as a server that most likely does
+  not trust the certificate of the adapter yet, with where to trust it; the scan's `opcua_ua_connect` adds the
+  same hint to its error. (#179, #192)
 - SimpleCAM adapter: an alert goes out with a `Severity` of NAMUR NE 107 and the field names of the data model. The
   backend had said `Warning`, which no consumer knows, and one such entry in the Events API left the machine page of
   the example app without any machine ("No answer from the backend"). `Warning` and every other unknown word now
