@@ -53,3 +53,29 @@ test("a tool under the name of another server, or of one of Titan's own, is not 
     ["juicebar_status"],
   )
 })
+
+test("a tool whose name says that it does something is not taken, whatever its mark says", () => {
+  const marked = (name: string) => ({ name, metadata: reads })
+  const tools = readingTools("opcua", [
+    marked("opcua_ua_read_value"),
+    marked("opcua_ua_browse"),
+    marked("opcua_ua_connect"),
+    marked("opcua_ua_disconnect"),
+    marked("opcua_registration_propose"),
+    marked("opcua_endpoint_rank"),
+  ])
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    ["opcua_ua_read_value", "opcua_ua_browse", "opcua_endpoint_rank"],
+  )
+  const names = (server: string, listed: Array<string>) => readingTools(server, listed.map(marked)).map((tool) => tool.name)
+  // A word that only holds such a word is none, and a word that is a thing as often as a deed is none either.
+  const read = ["x_pairing_status", "x_print_history", "x_order_get", "x_settings_list", "x_print_job_get"]
+  assert.deepEqual(names("x", read), read)
+  // A hyphen and a capital part words as an underscore does.
+  assert.deepEqual(names("x", ["x_ua-connect", "x_uaConnect", "x_connectDevice", "x_valve_open", "x_program_run", "x_alarm_ack"]), [])
+  // The price of the guard: a tool that reads and has such a word in its name is left out too.
+  assert.deepEqual(names("x", ["x_set_points_list"]), [])
+  // The name of the server is no word of the tool: a server called after a deed keeps its tools.
+  assert.deepEqual(names("pair", ["pair_status", "pair_start"]), ["pair_status"])
+})
