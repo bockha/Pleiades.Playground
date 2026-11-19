@@ -416,6 +416,11 @@ All notable changes are documented here. The format follows
 
 ### Changed
 
+- Example app: the microphone of the chat field can be held. Hold it while you speak and let go, as on a
+  tablet, and what was said goes into the field; a tap starts and ends the recording as before. The recording
+  starts as the finger goes down, so the first word is heard. While it records, the second line of the field
+  shows bars that move with the voice, the time and what ends it, where the finger does not cover it. The
+  recorder is the app's own now, so that the bars read the stream that records.
 - Example app: Live values with all machines shows only the graphs of a value some machine published, and
   next to the title of a graph at most one value of now, where a single machine measures it; more stand
   only as lines. Where machines are there and none published such a value, the page says so. With one machine
