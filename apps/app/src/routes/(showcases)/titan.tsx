@@ -25,7 +25,7 @@ import { gatewayVoice, speechAvailable } from "@/showcases/titan/voice/speech.ts
 import { faultBriefing, faultInWords, useNewFaults } from "@/showcases/titan/voice/faults.ts"
 import { sharingCards, useShown } from "@/showcases/titan/voice/shown.ts"
 import { loadRecognition } from "@/showcases/titan/voice/transcribe.ts"
-import { isPause, useWakeWord } from "@/showcases/titan/voice/wake.ts"
+import { AWAKE_MS, isPause, useWakeWord } from "@/showcases/titan/voice/wake.ts"
 import { greetingFor } from "@/showcases/titan/voice/greeting.ts"
 import { keyFactsOf, machinesNamed } from "@/showcases/titan/board.ts"
 import type { MachineFacts } from "@/showcases/titan/board.ts"
@@ -71,6 +71,8 @@ const AWAKE = "Ja?"
 const ON_IT = "Moment."
 /** What Titan says when the answer needs a tool and the model said nothing before it called one. */
 const LOOKING = "Ich schaue kurz nach."
+/** Titan speaks of a new fault by itself at most this often. */
+const FAULT_SAID_EVERY_MS = 60_000
 /** The space bar held shorter than this was a tap, not a question: Titan does not answer it. */
 const SHORTEST_QUESTION_MS = 600
 /** What Titan says when it pauses, and when it is back. */
@@ -219,11 +221,28 @@ function Assistant() {
   // The cloud keeps an eye on the hall. A new fault turns it red at once, and Titan speaks first: it is
   // told what happened and says it in its own words. Without a language model, the page says the fault
   // itself.
+  /** When Titan last spoke of a fault by itself. */
+  const lastFaultSaid = useRef(0)
+  /** What the space bar recorded is being recognised: the question is on its way. */
+  const recognising = useRef(false)
+  /** Someone speaks near the microphone, or that piece is being recognised: it may be a call or a question. */
+  const overhearing = useRef(false)
+  /** When "Hey Titan" was said alone: Titan waits for the question that follows. */
+  const wokeAt = useRef(-Infinity)
   const { alarmed, list } = useNewFaults((fault) => {
-    setHeard(undefined)
-    setProblem(undefined)
     // Before the start, in a pause or behind another tab, the fault is shown, not said.
     if (!latest.current.mayTalk) return
+    // A fault never talks over the person or over an answer. It is shown in the line on top and not said
+    // while Titan listens, thinks or speaks, while the space bar is held or what it recorded is being
+    // recognised, while someone speaks near the microphone, and while Titan waits for the question after
+    // "Hey Titan". In a hall where faults come often Titan also says at most one a minute, or nobody
+    // could ask it anything.
+    if (latest.current.state !== "idle" || holding.current || recognising.current || overhearing.current) return
+    if (performance.now() - wokeAt.current < AWAKE_MS) return
+    if (performance.now() - lastFaultSaid.current < FAULT_SAID_EVERY_MS && lastFaultSaid.current > 0) return
+    lastFaultSaid.current = performance.now()
+    setHeard(undefined)
+    setProblem(undefined)
     if (!canAnswer.current || !conversation.current) return void speak(faultInWords(fault, undefined))
     conversation.current.ask(faultBriefing(fault, undefined))
   })
@@ -248,7 +267,11 @@ function Assistant() {
     enabled: started && inFront && state === "idle",
     onReady: setWakeReady,
     onHeard: (text) => setOverheard(text),
+    onBusy: (busy) => {
+      overhearing.current = busy
+    },
     onWake: () => {
+      wokeAt.current = performance.now()
       setProblem(undefined)
       setHeard(undefined)
       if (!resume(AWAKE)) void speak(AWAKE)
@@ -299,8 +322,10 @@ function Assistant() {
       // The space bar interrupts: an answer that is still arriving is given up, and Titan listens.
       conversation.current?.stop()
       heldSince.current = performance.now()
+      recognising.current = true
       listen().then(
         (question) => {
+          recognising.current = false
           if (!question) {
             setProblem("Ich habe nichts verstanden. Halte die Leertaste gedrückt, solange du sprichst.")
             return
@@ -308,8 +333,19 @@ function Assistant() {
           setHeard(question)
           conversation.current?.ask(question)
         },
-        (error: unknown) => setProblem(error instanceof Error ? error.message : String(error)),
+        (error: unknown) => {
+          recognising.current = false
+          setProblem(error instanceof Error ? error.message : String(error))
+        },
       )
+    }
+
+    // The window lost the keyboard while the space bar was held: its release never arrives here, so the
+    // recording ends now, as if the key were let go.
+    const onBlur = () => {
+      if (!holding.current) return
+      holding.current = false
+      stopListening()
     }
 
     const onUp = (event: KeyboardEvent) => {
@@ -326,7 +362,9 @@ function Assistant() {
     window.addEventListener("keydown", onDown)
     window.addEventListener("keyup", onUp)
     window.addEventListener("click", onClick)
+    window.addEventListener("blur", onBlur)
     return () => {
+      window.removeEventListener("blur", onBlur)
       window.removeEventListener("keydown", onDown)
       window.removeEventListener("keyup", onUp)
       window.removeEventListener("click", onClick)
