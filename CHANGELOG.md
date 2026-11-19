@@ -7,6 +7,11 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Generative UI backend and cards: the job order card. `genui_job_order_show` shows the job order of one
+  machine (`JobMonitoring.JobOrders` with its result) and its program execution
+  (`WorkMasterMonitoring.ProgramExecution`) by the names of the umati data model, from the Events API; the
+  card draws both over the last hours as a timeline, which it asks `genui_job_order_timeline` for. The chat
+  draws it, and other hosts get it as `ui://genui/joborder`.
 - OPC UA adapter: a person chooses the security of the sessions to a server under "Choose the security" on
   the endpoints card of the chat, a weaker endpoint or `None` included. Before `None` is taken the card shows
   a destructive warning; the endpoint taken, the proposal and the list of servers warn too. The adapter keeps
