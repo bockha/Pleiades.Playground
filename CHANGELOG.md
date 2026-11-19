@@ -7,6 +7,12 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Margo app: the example app registers at the Pleiades Hub, as in `compose.yaml`, with the section
+  *Pleiades Hub* of the settings. *Register at the Pleiades Hub* (`HUB_REGISTRATION`, on by default) switches
+  the registration off, since a Margo client may leave an empty broker out and the default would come back;
+  the server of the app takes `HUB_REGISTRATION=false` everywhere. *Broker of the hub* is the broker of the
+  stack by default, and *Address of the example app for the hub* is Traefik under *Host name of the app*,
+  over HTTP, so the hub links to the address a browser on the network uses once Traefik is opened to it.
 - Example app: the showcase page `/trulaser`, a cockpit of a TRUMPF laser cutting machine named as the umati
   data model names it: `State.Status` with `Notification.ActiveAlerts` and its history on one time axis, the
   `JobOrder` with its `ProgramExecution`, and from the TRUMPF extension (`oem/Dalle/`) the requests of the
