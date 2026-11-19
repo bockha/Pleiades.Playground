@@ -55,7 +55,7 @@ const patience = 10
 /** The pause between two reads of an order. The next read starts when the last one has ended. */
 const READ_EVERY_MS = 1000
 
-export function DrinkPicker({ drinks: listed }: { drinks: Array<Drink> }) {
+function DrinkPicker({ drinks: listed }: { drinks: Array<Drink> }) {
   const { drinks, hidden, low } = orderable(listed)
   const [pickedId, setPickedId] = useState(drinks[0]?.id)
   const [step, setStep] = useState<Step>({ at: "pick" })
@@ -264,7 +264,7 @@ export const juicebarTools: ReadonlyArray<ChatTool> = [
     name: "juicebar_drinks_list",
     label: { running: "Reading the drinks", done: "Read the drinks", failed: "Failed to read the drinks" },
     // For the chat only: a page asks the generative UI backend alone (pages/call-part.ts), which has no
-    // juicebar_* tool. The showcase page /juice-bar draws the card on a page of its own.
+    // juicebar_* tool.
     saveAsPage: false,
     draw(content) {
       const drinks = drinksOf(content)
