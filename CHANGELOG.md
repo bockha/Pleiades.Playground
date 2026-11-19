@@ -7,6 +7,12 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Bending machine, started with the stack: a simulator of a press brake that reports through RCI telegram files, with a
+  web page, and one adapter per machine that publishes it after the binding of machines (data model 0.17.1) as
+  `trumpf_5085_AE325085TB46`: identification, `State/Status`, `Notification/ActiveAlerts` with `AlertRaised` and
+  `AlertCleared`, operator messages as `Notification.NotificationEvent`, and program, order and parts as signals of
+  the manufacturer below `oem/`. The automatic processing reports running and idle around each position and ends it
+  with `ProcessingStopped`, after which the adapter shows no program.
 - Margo app: the example app registers at the Pleiades Hub, as in `compose.yaml`, with the section
   *Pleiades Hub* of the settings. *Register at the Pleiades Hub* (`HUB_REGISTRATION`, on by default) switches
   the registration off, since a Margo client may leave an empty broker out and the default would come back;
