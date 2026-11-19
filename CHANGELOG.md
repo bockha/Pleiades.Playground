@@ -7,6 +7,15 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- Example app: a machine added over OPC UA in the chat goes on a site too, so Home shows it: on the only
+  site there is, or on the one a person chooses on the proposal where there are several. A toast says it,
+  "A1121O0001 added · North plant", as Home does for a machine it puts on a site. Where there is no site, or
+  the Sites API does not answer, the machine is added on no site, and the proposal and the toast say why.
+- Example app: the chips of an OPC UA proposal in the chat are pressed to see what they count. "2 missing"
+  lists the two missing elements with their values and why, "Core: 1 not available" what the core lacks,
+  and a profile marked incomplete what it lacks; pressed again, the list closes. The proposal shows no table
+  until a chip is pressed. On the mapping of `/mapping`, the chips of the numbers filter its table the same
+  way. The list of servers of `/opcua` has the numbers but not the elements, so its chips stay as they are.
 - Bending machine, started with the stack: a simulator of a press brake that reports through RCI telegram files, with a
   web page, and one adapter per machine that publishes it after the binding of machines (data model 0.17.1) as
   `trumpf_5085_AE325085TB46`: identification, `State/Status`, `Notification/ActiveAlerts` with `AlertRaised` and
