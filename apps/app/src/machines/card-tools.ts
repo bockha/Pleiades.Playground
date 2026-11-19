@@ -20,3 +20,17 @@ export const MEASUREMENT_SERIES_TOOL = "genui_measurement_series"
  * cards/energy/chat.tsx.
  */
 export const ENERGY_SERIES_TOOL = "genui_energy_series"
+
+/**
+ * The tools for the lines of a time series card and for what a person can add to it. Only a card calls
+ * them: the chat asks for them itself, see get-machines.ts, and keeps them from its language model,
+ * see cards/timeseries/chat.tsx.
+ */
+export const TIMESERIES_SERIES_TOOL = "genui_timeseries_series"
+export const TIMESERIES_SIGNALS_TOOL = "genui_timeseries_signals"
+
+/**
+ * The tool for the timeline of the job order card. Only a card calls it: the chat asks for the timeline
+ * itself, see get-machines.ts, and keeps the tool from its language model, see cards/joborder/chat.tsx.
+ */
+export const JOB_ORDER_TIMELINE_TOOL = "genui_job_order_timeline"

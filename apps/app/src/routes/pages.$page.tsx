@@ -1,17 +1,34 @@
 import { clock } from "@pleiades/cards/machine/format.ts"
 import { Button, buttonVariants } from "@pleiades/ui/components/button"
 import { Toggle } from "@pleiades/ui/components/toggle"
+import { Skeleton } from "@pleiades/ui/components/skeleton"
+import { toast } from "@pleiades/ui/components/toast"
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router"
-import { EllipsisIcon, PencilIcon, PinIcon, SearchXIcon, Trash2Icon } from "lucide-react"
+import { CheckIcon, EllipsisIcon, PencilIcon, PinIcon, SearchXIcon, SquarePenIcon, Trash2Icon } from "lucide-react"
 import { useEffect, useId, useRef, useState } from "react"
 
 import { useRetry } from "@/hooks/use-live.ts"
+import { AddCard } from "@/pages/add-card.tsx"
+import { cannotAdd } from "@/pages/add-part.ts"
 import { Column, PartsLoading } from "@/pages/column.tsx"
-import { DrawnPart, answerParts, waitsForBackend } from "@/pages/drawn-part.tsx"
+import { DrawnPart, askParts, useAnswers, waitsForBackend } from "@/pages/drawn-part.tsx"
+import { OnlyPart, PartControls, controlId } from "@/pages/part-controls.tsx"
 import { MAX_TITLE_LENGTH } from "@/pages/recipe.ts"
-import type { StoredPage } from "@/pages/recipe.ts"
+import type { RecipePart, StoredPage } from "@/pages/recipe.ts"
 import { SharePage } from "@/pages/share-page.tsx"
-import { deletePage, getPage, pinPage, renamePage, unpinPage, usePage } from "@/pages/store.ts"
+import { shownParts } from "@/pages/shown-parts.ts"
+import {
+  addPart,
+  deletePage,
+  getPage,
+  movePart,
+  pinPage,
+  putPartBack,
+  removePart,
+  renamePage,
+  unpinPage,
+  usePage,
+} from "@/pages/store.ts"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +68,7 @@ export const Route = createFileRoute("/pages/$page")({
   loader: async ({ params }) => {
     const page = getPage(params.page)
     if (!page) throw notFound()
-    return { parts: await answerParts(page.recipe.parts), readAt: new Date().toISOString() }
+    return { parts: askParts(page.recipe.parts), readAt: new Date().toISOString() }
   },
   component: KeptPage,
   pendingComponent: Loading,
@@ -61,28 +78,173 @@ export const Route = createFileRoute("/pages/$page")({
 function KeptPage() {
   const { page: id } = Route.useParams()
   const page = usePage(id)
-  const { parts, readAt } = Route.useLoaderData()
-  useRetry(parts.some(waitsForBackend))
   // Deleted in another tab while it was open.
   if (!page) return <NoPage />
+  // One for each page: editing a page does not go on in the next one opened.
+  return <ShownPage key={page.id} page={page} />
+}
+
+/**
+ * A kept page: its head, and its parts as the recipe has them now. Each part keeps the answer the
+ * loader gave it (`shownParts`), so a part that is removed or moved asks no other part again. A part
+ * the loader did not answer, one added or put back after the page was read, is asked alone, and the
+ * others keep what they have.
+ *
+ * "Edit" in the head shows the controls above each part: move it up or down, remove it; and at the
+ * end of the page "Add a card". A change is kept at once, as a new title is. A removed part is
+ * nowhere else, so a toast offers to put it back. An added part needs no undo: it stands where the
+ * person pressed, with "Remove" above it, and nothing was lost.
+ */
+function ShownPage({ page }: { page: StoredPage }) {
+  const { parts, readAt } = Route.useLoaderData()
+  // The answers come part by part: those of the loader, and of each part asked alone after it. An
+  // answer stands until the newer one of its part comes, also while the page is read again.
+  const { answers, ask } = useAnswers(parts)
+  const shown = shownParts(page.recipe.parts, answers)
+  useRetry(shown.some(({ answered }) => answered !== undefined && waitsForBackend(answered)))
+  // A part the loader did not ask, one added or put back after the page was read, is asked alone.
+  const askedByLoader = new Set(shownParts(page.recipe.parts, parts).flatMap(({ key, answered }) => (answered ? [key] : [])))
+  const asking = useRef(new Set<string>())
+  useEffect(() => {
+    for (const { key, part, answered } of shown) {
+      if (answered !== undefined || askedByLoader.has(key) || asking.current.has(key)) continue
+      asking.current.add(key)
+      ask(part)
+    }
+  })
+
+  const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const prefix = useId()
+  // After a change the focus goes to a control of the part it was about, once the page shows the change.
+  const focusNext = useRef<string | null>(null)
+  useEffect(() => {
+    if (focusNext.current === null) return
+    document.getElementById(focusNext.current)?.focus()
+    focusNext.current = null
+  })
+
+  function move(from: number, to: number) {
+    // The focus stays with the part, on the same arrow; at the top or the bottom that one is off, so on the other.
+    const control = to === 0 ? "down" : to === shown.length - 1 ? "up" : to < from ? "up" : "down"
+    focusNext.current = controlId(prefix, to, control)
+    if (!movePart(page.id, from, to)) {
+      focusNext.current = null
+      notKept()
+    }
+  }
+
+  function remove(at: number) {
+    const part = page.recipe.parts[at]
+    const left = shown.length - 1
+    // The focus goes to "Remove" of the part that takes its place, or of the one before it; with one
+    // part left, to "Delete page" in the notice that says why it stays.
+    focusNext.current =
+      left === 1 ? controlId(prefix, 0, "delete") : controlId(prefix, Math.min(at, left - 1), "remove")
+    if (!removePart(page.id, at)) {
+      focusNext.current = null
+      notKept()
+      return
+    }
+    const removed = toast.add({
+      title: `Part ${at + 1} removed`,
+      description: `From "${page.recipe.title}".`,
+      // The time the docs of the Toast of Base UI give a toast with an undo.
+      timeout: 10_000,
+      actionProps: {
+        children: "Undo",
+        onClick() {
+          toast.close(removed)
+          if (putPartBack(page.id, at, part)) return
+          // "Add a card" may have filled the page, or put the same card on it, while this toast
+          // stood: then the page says that, as "Add a card" does; else the storage said no.
+          notKept(cannotAdd(getPage(page.id)?.recipe.parts ?? [], part) ?? NOT_KEPT)
+        },
+      },
+    })
+  }
+
+  /** Puts a card a person chose at the end of the page. Null if it is there, or why not. */
+  function add(part: RecipePart): string | null {
+    if (addPart(page.id, part)) return null
+    // Another tab may have changed the page since the dialog checked it; else the storage said no.
+    return cannotAdd(getPage(page.id)?.recipe.parts ?? [], part) ?? NOT_KEPT
+  }
+
   return (
-    <Column head={<Head page={page} line={`as of ${clock(readAt)}`} />}>
-      {parts.map((part, index) => (
-        // The parts of a page keep their order, so the place is the key.
-        <DrawnPart key={index} part={part} />
+    <Column
+      head={
+        <Head
+          page={page}
+          line={`as of ${clock(readAt)}`}
+          editing={editing}
+          onEditingChange={setEditing}
+          deleting={deleting}
+          onDeletingChange={setDeleting}
+        />
+      }
+    >
+      {shown.map(({ key, answered }, at) => (
+        // The key stays with the part when it moves, so its card is not drawn anew.
+        <div key={key} className="flex flex-col gap-2">
+          {editing &&
+            (shown.length === 1 ? (
+              <OnlyPart prefix={prefix} onDeletePage={() => setDeleting(true)} />
+            ) : (
+              <PartControls prefix={prefix} at={at} count={shown.length} onMove={move} onRemove={remove} />
+            ))}
+          {answered ? <DrawnPart part={answered} /> : <Skeleton className="h-40 w-full" />}
+        </div>
       ))}
+      {editing && (
+        <AddCard
+          parts={page.recipe.parts}
+          onAdd={add}
+          // The new part is the last, and on a page of two parts or more every part has "Remove" above it.
+          added={() => document.getElementById(controlId(prefix, (getPage(page.id)?.recipe.parts.length ?? 0) - 1, "remove"))}
+        />
+      )}
     </Column>
   )
 }
 
+/** Why a change of the parts was not kept, when the storage did not take it. */
+const NOT_KEPT = "This browser did not keep the change: it blocks its storage, or the storage is full."
+
+/**
+ * A change of the parts that did not happen: the page is as it was, and says why. Without a reason
+ * of its own, the storage did not take the change.
+ */
+function notKept(why: string = NOT_KEPT) {
+  toast.add({
+    type: "error",
+    title: "The page was not changed",
+    description: why,
+    priority: "high",
+  })
+}
+
 /**
  * The head of a page, laid out like the heads of the other pages: the title, which can be renamed
- * in place, and the line under it; beside them the pin, "Share" and a menu with what else there is
- * to do.
+ * in place, and the line under it; beside them "Edit", the pin, "Share" and a menu with what else
+ * there is to do.
  */
-function Head({ page, line }: { page: StoredPage; line: string }) {
+function Head({
+  page,
+  line,
+  editing,
+  onEditingChange,
+  deleting,
+  onDeletingChange: setDeleting,
+}: {
+  page: StoredPage
+  line: string
+  editing: boolean
+  onEditingChange: (editing: boolean) => void
+  deleting: boolean
+  onDeletingChange: (deleting: boolean) => void
+}) {
   const navigate = useNavigate()
-  const [deleting, setDeleting] = useState(false)
   return (
     // Where the title and the buttons do not fit side by side, the buttons go under the title.
     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -91,6 +253,11 @@ function Head({ page, line }: { page: StoredPage; line: string }) {
         <p className="text-sm text-muted-foreground">{line}</p>
       </div>
       <div className="flex items-center gap-2">
+        {/* The controls of the parts come with "Edit" and go with "Done": a page is read far more often than changed. */}
+        <Button variant={editing ? "default" : "outline"} onClick={() => onEditingChange(!editing)}>
+          {editing ? <CheckIcon data-icon="inline-start" /> : <SquarePenIcon data-icon="inline-start" />}
+          {editing ? "Done" : "Edit"}
+        </Button>
         {/* A pinned page stands in the sidebar, on the top level like Home. */}
         <Toggle
           variant="outline"

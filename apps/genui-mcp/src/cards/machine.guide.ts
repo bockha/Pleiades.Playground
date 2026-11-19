@@ -1,3 +1,5 @@
+import { MOST_JOB_ORDER_CARDS } from "../job-orders.ts"
+
 // What the skill guide of the server says about the machine card: its sections, as markdown.
 
 export const machineGuide = `## Machines
@@ -5,7 +7,12 @@ export const machineGuide = `## Machines
 \`genui_machine_list\` lists every machine that published a value in the last 24 hours. Pass the
 \`timeZone\` of the person you answer, if you know it. A machine is named by its id (\`machine\`),
 \`<manufacturer>_<model>_<serial number>\`, the level after \`machines/\` in every topic; name it to a
-person by its \`identity\`: manufacturer, model and serial number.
+person by its \`identity\`: manufacturer, model, serial number and, where the machine names it, its device class.
+
+A tool about one machine takes its id or what people call it: words of the id in their order, such
+as the serial number (\`P-04\`) or the model and serial number (\`AX-400 P-04\`). Pass the name the
+person used; you need not list the machines first to learn the id. A name that fits several machines
+is refused with their ids, and one that fits none with the ids of every machine.
 
 - \`connection\`: \`umati/Connection/State\`, the state of the adapter. Anything but \`Running\`
   (\`Initializing\`, \`CommunicationFault\`, \`Shutdown\`) means the other readings are the last known
@@ -28,7 +35,7 @@ alert stands for a reason nobody recorded.
 
 ## One machine
 
-\`genui_machine_show\` takes the machine id (\`machine\`) and returns the same readings for that
+\`genui_machine_show\` takes the machine (\`machine\`) and returns the same readings for that
 machine, and its \`history\`: how long each state lasted in total between \`from\` and \`to\`
 (\`totals\`, in seconds). \`hours\` says how far back the history goes, 8 if omitted, 24 at most.
 The sums are added up here. Take them from there, and do not count states yourself.
@@ -49,4 +56,19 @@ A span has one of five states, decided from the values in this order:
 A band has room for a few hundred spans. A history with more is thinned to that many: each slot of
 the band then shows the state that lasted longest in it, and an alarm always keeps a slot, so none
 is thinned away. The sums are not affected: they are added up from every span.
+
+## Job orders
+
+\`genui_job_order_list\` lists the job orders on the lists of the machines whose last event lies in
+the last 24 hours, of every machine or of one (\`machine\`): what is ordered (\`state\`, \`jobName\`,
+\`workMaster\`, \`orderNumbers\`, \`runsPlanned\`) and what came of it from its start (\`start\`, \`end\`,
+\`produced\`, \`good\`, \`result\`). Job orders that name the same order number belong to one order of
+the ERP, also on different machines. A job order without an order number is an order of its own.
+A job order \`Aborted\` without a \`start\` never ran: the planner took it back.
+
+The list is no card. A question about the job order of a machine, or what it runs, is answered by
+\`genui_job_order_show\`, which draws the job order card. A question about the job orders of every
+machine starts with the list; then show the card with \`genui_job_order_show\` for each machine whose
+job order runs or is interrupted, one call for each, as the result of the list names them. Where more
+than ${MOST_JOB_ORDER_CARDS} machines have one, the list names none, and the answer is the list in words.
 `

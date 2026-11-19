@@ -2,9 +2,18 @@ using Pleiades.Playground.Mqtt.Extensions.Machines;
 
 namespace Pleiades.Playground.JuiceBar.Api;
 
-internal sealed record DrinkComponent(string Id, string? Name);
+/// <summary>
+/// An ingredient of a drink. <paramref name="Color"/> is the colour the marketplace shows it in, as <c>#rrggbb</c>.
+/// <paramref name="RunsLow"/> says that the bottle of its pump warns; null while the warnings are not known.
+/// </summary>
+internal sealed record DrinkComponent(string Id, string? Name, string? Color = null, bool? RunsLow = null);
 
-internal sealed record Drink(string Id, string Title, string? Description, IReadOnlyList<DrinkComponent> Components);
+/// <summary>
+/// A drink of the card. <paramref name="Color"/> and <paramref name="Picture"/> are what its author chose in the
+/// marketplace: a colour as <c>#rrggbb</c>, and the picture of a glass, named by the id its drawing gives it.
+/// </summary>
+internal sealed record Drink(string Id, string Title, string? Description, IReadOnlyList<DrinkComponent> Components,
+    string? Color = null, string? Picture = null);
 
 /// <summary>One pump of the machine. The bottle volume is the configured size of a full bottle, not a level.</summary>
 internal sealed record Pump(int Number, string? ComponentId, string? ComponentName, double? BottleVolumeCubicMetre,
@@ -15,6 +24,25 @@ internal sealed record QueuedOrder(int OrderNumber, string? OrderName, string? D
 internal sealed record JuiceBarStatus(bool Connected, string? ProductionState, string? PumpControlMode,
     string? PumpControlServiceState, double? ProgressFraction, IReadOnlyList<QueuedOrder> Queue,
     IReadOnlyList<Pump> Pumps, bool OrderingEnabled, int MaximumQueueLength, DateTimeOffset ObservedAt);
+
+/// <summary>
+/// One ingredient on the pumps of the machine, and in how many sold drinks it was by the report of the marketplace:
+/// in the last <see cref="Consumption.Hours"/> and since the start. A count is null where the report does not say it:
+/// the ingredient has no name, or it is not among the lines of a report that is full or has a line that could not be
+/// read. <paramref name="Pumps"/> are the numbers of the pumps it is on, <paramref name="RunsLow"/> whether the bottle of
+/// one of them warns; null while the warnings are not known.
+/// </summary>
+internal sealed record IngredientUse(string ComponentId, string? Name, string? Color, IReadOnlyList<int> Pumps,
+    int? DrinksInHours, int? DrinksSinceStart, bool? RunsLow);
+
+/// <summary>
+/// How the ingredients on the pumps were used, the most used since the start first. <paramref name="LeastUsedId"/> is the
+/// one in the fewest drinks since the start, fewer in the last hours deciding a tie; null when there is no ingredient
+/// or the count of one is not known. <paramref name="Summary"/> says it in a few words, <paramref name="Source"/> where
+/// the counts come from.
+/// </summary>
+internal sealed record Consumption(DateTimeOffset From, DateTimeOffset To, int Hours, IReadOnlyList<IngredientUse> Ingredients,
+    string? LeastUsedId, string Summary, string Source);
 
 internal sealed record OrderRequest(string DrinkId);
 
@@ -58,6 +86,12 @@ internal sealed class JuiceBarOptions
 
     /// <summary>Language of the names the machine returns: <c>en</c> or <c>de</c>.</summary>
     public string Language { get; set; } = "en";
+
+    /// <summary>
+    /// Address of the website of the marketplace the machine takes its recipes from. Its public report says how often
+    /// each ingredient went into a sold drink. Empty: the use of the ingredients is not read.
+    /// </summary>
+    public string MarketplaceUrl { get; set; } = string.Empty;
 }
 
 /// <summary>The machine did not answer, or answered with something this service does not understand.</summary>

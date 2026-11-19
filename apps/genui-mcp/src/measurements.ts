@@ -6,7 +6,7 @@ import { listTopics, readNewest, readTimelines } from "./apis.ts"
 import type { Apis, Newest } from "./apis.ts"
 import { silences, silentBetween } from "./liveness.ts"
 import type { Stretch } from "./liveness.ts"
-import { HORIZON_SECONDS, WINDOW_SECONDS, machineOf, readSignsOfLife } from "./machines.ts"
+import { HORIZON_SECONDS, WINDOW_SECONDS, machineNamed, machineOf, readSignsOfLife } from "./machines.ts"
 import { secondsBefore } from "./time.ts"
 
 // What every machine measures now: the newest value of each physical quantity, in the unit it was
@@ -46,19 +46,26 @@ export function measurementOf(
 
 /**
  * Every machine that published a value in the last 24 hours, with the newest value of each
- * quantity; with `machine`, that one only. Whether a value is current is read from the signs of
- * life of the last WINDOW_SECONDS, as the list of machines reads it.
+ * quantity; with `name`, that one only, by its id or as people call it (`machineNamed`). Whether a
+ * value is current is read from the signs of life of the last WINDOW_SECONDS, as the list of
+ * machines reads it.
  */
-export async function listMeasurements(apis: Apis, now = new Date(), machine?: string): Promise<MeasurementList> {
+export async function listMeasurements(apis: Apis, now = new Date(), name?: string): Promise<MeasurementList> {
   const windowStart = secondsBefore(now, WINDOW_SECONDS)
-  const [topics, signs] = await Promise.all([
+  const signsFrom = secondsBefore(windowStart, SILENT_AFTER_SECONDS)
+  // Without a name, the machines and the signs of life of all of them are read at once. A name is
+  // first matched to the machines that published in the last 24 hours, and then only the signs of
+  // that machine are read.
+  const [topics, everySign] = await Promise.all([
     listTopics(apis, secondsBefore(now, HORIZON_SECONDS), now),
-    readSignsOfLife(apis, secondsBefore(windowStart, SILENT_AFTER_SECONDS), now),
+    name === undefined ? readSignsOfLife(apis, signsFrom, now) : undefined,
   ])
   const known = [...new Set(topics.flatMap((topic) => machineOf(topic) ?? []))].sort()
+  const machine = name === undefined ? undefined : machineNamed(known, name)
   if (machine !== undefined && !known.includes(machine)) {
     throw new Error(`No machine "${machine}" published a value in the last 24 hours. Machines that did: ${known.join(", ") || "none"}.`)
   }
+  const signs = everySign ?? (await readSignsOfLife(apis, signsFrom, now, machine))
   const machineIds = machine === undefined ? known : [machine]
   const machines = await Promise.all(
     machineIds.map(async (machineId) => {
@@ -115,20 +122,23 @@ export function slotted(
 
 /**
  * Every quantity of every machine over the last minutes, a line for each machine that has a
- * value of it. A line begins with the value that held where the minutes begin, however old, so a
- * value that is published only when it changes is drawn too.
+ * value of it; with `machine`, the lines of that machine only, and nothing of the others is read.
+ * A line begins with the value that held where the minutes begin, however old, so a value that is
+ * published only when it changes is drawn too.
  */
 export async function listMeasurementSeries(
   apis: Apis,
   minutes = SERIES_MINUTES,
   slots = SERIES_SLOTS,
   now = new Date(),
+  machine?: string,
 ): Promise<MeasurementSeries> {
   const from = secondsBefore(now, minutes * 60)
+  const who = machine ?? "*"
   // The signs of life just before say whether the machine was there where the lines begin.
   const [signs, ...timelines] = await Promise.all([
-    readSignsOfLife(apis, secondsBefore(from, SILENT_AFTER_SECONDS), now),
-    ...QUANTITIES.map((quantity) => readTimelines(apis, sources[quantity].kind, `machines/*/${sources[quantity].path}`, from, now)),
+    readSignsOfLife(apis, secondsBefore(from, SILENT_AFTER_SECONDS), now, who),
+    ...QUANTITIES.map((quantity) => readTimelines(apis, sources[quantity].kind, `machines/${who}/${sources[quantity].path}`, from, now)),
   ])
   const samplesOf = (quantity: Quantity, machine: string) =>
     timelines[QUANTITIES.indexOf(quantity)]?.find((one) => one.topic === topicOf(machine, quantity))?.samples ?? []

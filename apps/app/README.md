@@ -4,27 +4,65 @@ The example application: a single-page app on [TanStack Start](https://tanstack.
 the app. The server delivers the document, the server routes and the server functions, and runs the agent
 harness.
 
-- **Home** asks "what needs you?": it lists the machines of the demo stack, first those in alarm, stopped or
-  without data, then those in setup, then the running ones. It is live: see below.
-- **A page per machine** (`/machines/alcyone-machines_AX-400_P-04`, by the machine id) shows the machine card of the
+- **Home** (`/`) shows where the machines stand: site by site and hall by hall, a row for each machine, each
+  site under a head with how many of its machines are in each state, and under the title how many send data now and
+  how many need someone, as `genui_site_list` counts them. "Needs you" keeps the machines that need someone, what Home used to show first; a search finds one; ten sites make a
+  page, and the choice and the page stay in the URL (`?show=needs`, `?page=`). The sites come from the Sites API through `genui_site_list`. It is live: see below. It needs no language model. The address `/sites`, where the list of the
+  sites stood before, leads to `/`. A machine is on Home only once people put it on a site: a bar above the list names the machines that sent data in the last 24 hours and stand on no site, a few by name and "+N", and its "Review and add" opens "Add machine" with the first of them chosen; "Add machine" at the top opens the same dialog empty, where a machine is also named by its id. The dialog takes the machine, the site, the hall and the name people know it by; a new site or hall is made there too. While the Sites API does not answer, one line says so and names a few of the machines that send, and nothing can be added. The menu of a row on a site moves the machine ("Move…") or takes it off its site ("Remove from site"), and each change is undone from its toast, as long as nobody changed the machine since; a site or hall the change made goes with it. The app writes to the REST endpoints of the Sites API, from its server, with no sign-in: whoever reaches the app can add and remove machines.
+- **A page per machine** (`/sites/alcyone-machines_AX-400_P-04`, by the machine id) shows the machine card of the
   [card catalogue](../../packages/cards/README.md): what the machine does now and what it did over the last
-  hours. It needs no language model. Home leads to it. For a machine the backend does not know, the page
+  hours. It needs no language model. Home leads to it, and it stands under Home. An address of before, `/machines/<machine id>`, leads to it with
+  the hours of its history. For a machine the backend does not know, the page
   says so and does not ask again.
+- **Halls** (`/halls`) draws every hall of every site as a plan seen from above, each machine where it stands
+  with its state, live. The positions are what people entered in the Sites API, in metre; a machine without one
+  waits in rows on the plan, with a dashed edge. A person drags a machine to where it stands, with a finger or
+  the mouse, or moves it half a metre with an arrow key; the app keeps the position to half a metre, in the
+  Sites API, from its server and with no sign-in, as Home writes. It reads the same answer as Home,
+  `genui_site_list`, and needs no language model.
 - **Live values** (`/live`) draws a graph for each physical value over the last 15 minutes, a line for each
   machine, live. A choice above the graphs shows one machine or all of them, and stays in the URL
-  (`?machine=`).
+  (`?machine=`). With all of them, a value no machine published has no graph, and the value of now stands
+  next to the title of a graph only where a single machine measures it. With one machine chosen, every signal
+  it published in the last 24 hours has a graph of its own, found anew each time the machine is chosen. A
+  button at the top right of a graph shows it enlarged; its X closes it.
 - **Pages** (`/pages`) are what a person keeps of the chat, in this browser. "Save as page" under an answer
   of the chat makes one: all the cards of that answer, in their order, titled with the question. It stands
   under an answer that has ended and for which the chat drew a card, and needs no language model: the app
   reads the tool calls from the answer it already has. The page opens beside the chat, which stays open, and
-  the row under the answer then says "Saved as page" and links to it. Nothing is kept unless a person
-  presses it. A page is a recipe: a title
-  and its parts in their order, each part a tool of `genui-mcp` with its arguments. No value is kept and no
-  sentence of a language model: opening a page calls the tools again and draws each answer with the card
-  the chat draws for that tool, so it shows what holds now and needs no language model. It is read once, and
-  its head says as of when; only while a part waits for the backend is it read again. A part whose tool
-  the app has no card for stays where it is and says so; the rest of the page is whole. A page can be
-  renamed, pinned and deleted from its head. A pinned page stands in the sidebar on the top level, beside
+  the row under the answer then says "Saved as page" and links to it. Asked for a page, a dashboard or an
+  overview, the chat proposes one instead: the model finds out with its tools what there is to show and
+  composes a recipe with the tool of the app `app_page_propose`, which the app checks against the tools a
+  page can call. The chat shows the proposal with its title and its parts in words, "Save to my pages" and
+  "Preview", which opens it as a link opens. Nothing is kept unless a person presses it. Why:
+  [ADR-0020](../../docs/adr/0020-the-language-model-composes-a-page-and-nothing-else.md). Asked to add a machine,
+  to put machines on a site, or to create a site or a hall, the chat proposes it with the second tool of the app,
+  `app_placement_propose`, and draws a card that asks step by step for what is missing (which machine, where) and
+  writes only when a person presses its button, through the server functions and with the undo of Home. Why:
+  [ADR-0026](../../docs/adr/0026-the-chat-proposes-where-a-machine-stands.md). A page is a recipe: a title
+  and its parts in their order, each part a tool the chat draws a card for, with its arguments. No value is
+  kept and no sentence of a language model: opening a page calls the tools again, each at the server that has
+  it, and draws each answer with the card the chat draws for that tool, so it shows what holds now and needs no
+  language model. The server of a tool is the one whose name stands before its first `_`: `genui-mcp` for
+  `genui_*`, the OPC UA adapter for `opcua_*`, the entry `juicebar` of `APP_MCP_SERVERS` for the drink card
+  `juicebar_drinks_list`. A page calls only a tool its server marks as reading, since it calls it each time it
+  is opened; a scan of an OPC UA server is no part. It is read once, and its head says as of when; only while a
+  part waits for its server is it read again. A part whose tool the app has no card for, or whose server this
+  app does not have, stays where it is and says so; the rest of the page is whole. Why:
+  [ADR-0025](../../docs/adr/0025-a-part-of-a-page-asks-the-server-that-has-its-tool.md). A page can be
+  renamed, pinned and deleted from its head. "Edit" there shows above each part "Move up", "Move down" and
+  "Remove", by hand and with no language model, and "Done" takes them away again; a change is kept at once,
+  and no part is asked again because another one moved or went. A removed part is kept nowhere else, so the
+  toast that says so has "Undo". The only part of a page stays: "Delete page" is the way to be rid of it.
+  "Add a card" at the end of a page that is edited adds one, also by hand: a dialog offers the cards a page
+  can hold, each by what it shows, and asks what the chosen one takes, as the input schema of its tool on its
+  server says: a machine, chosen by its name from the machines Home lists, and the hours of a history in
+  their range. An optional argument left empty stays out, so the measurements without a machine are every
+  machine; the list of machines the energy card can take has no field, and that card shows every machine.
+  The card goes to the end and shows its values at once; the other parts are not asked again. The same card
+  with the same choices, a thirteenth part or a storage that says no adds nothing, and the dialog says why;
+  without an answer of the backend nothing can be added. An added card is removed like any other.
+  A pinned page stands in the sidebar on the top level, beside
   Home; under it a group "Pages", which folds, lists the pages that are not pinned, the newest first, and
   there is no group where there is nothing to list. `/pages` lists them all and is reached through the
   breadcrumb. Another browser, or a private window, has pages of its own. "Share" in the
@@ -36,13 +74,16 @@ harness.
 - **Chat** is the panel on the right. It works like a chat app on a phone: a list and a chat, with a way
   back. The list, headed "Chats", shows the chats so far and, below them, the field that begins a new
   chat, with questions to begin with. A chat says in its head what it is called, on one line and cut where it
-  is too long, and "All chats" at the left of the head leads back to the list; there is no "New chat" in a
-  chat, a new one begins in the field of the list. A chat is called by its first question, up to 80
+  is too long, and "All chats" at the left of the head leads back to the list. "New chat", the plus in the head
+  of the list and of every chat, opens a new chat with no question yet, its field ready to write in; after the
+  first question the field of the chat keeps the cursor. A chat is called by its first question, up to 80
   characters, which the panel shows from the moment it is asked. Without a language model the head says
   "Chat". The panel opens from the button in the
   header, and a question from the field in the header or from "Ask why" on a machine starts a chat in it. A
   language model answers and calls the tools of [`genui-mcp`](../genui-mcp/README.md); the app draws the values
-  of a tool call itself: a card of the catalogue, or a list with the same rows as Home. An answer is drawn
+  of a tool call itself: a card of the catalogue, or a list with the same rows as Home. The list of all
+  machines is drawn only where the answer calls no other tool after it: a model that read it to find a
+  machine leaves it a step that opens to the list (`lookup` in `src/chat/tool-results.ts`). An answer is drawn
   from its markdown, and its times are those of your clock: the browser sends its time zone along with a
   question, and the server adds it to the tool calls. Whether the panel is open, and with which chat, is in
   the URL (`?chat=`), and the page stays where it is: you chat about what you see. Everything about the chat
@@ -62,13 +103,17 @@ would not show it yet either. The line under the title
 says "live" while the browser hears the broker, and "not live" while it does not; the page then reads again
 once the broker is back, for what it missed. A page reads on a clock only while the backend has not answered.
 
+The server can also register the app at the Pleiades Hub, the page that shows the apps of a Pleiades system
+under one header. It does so where `HUB_MQTT_URL` is set. The demo stack sets it, so there the app registers
+at the broker of the stack, see [Pleiades Hub](#pleiades-hub).
+
 | | |
 |---|---|
 | In the demo stack | <http://localhost:5600/>, port from `APP_PORT`, on this computer only (`APP_BIND`) |
 | Liveness | `GET /health` |
-| Image | `pleiades.playground.app` |
+| Image | `pleiades.playground.app`, the app alone. `pleiades.playground.app.showcases` is the same app built with its showcases, for a demo or a fair; `APP_SHOWCASES` in `.env` takes that one, see `src/showcases/` under [What is where](#what-is-where) |
 | Version | At the bottom of the sidebar: `0.0.142 · 7a83c2f` for an image of the workflow "Images", linked to its commit; `dev` for a build of your own, with the commit of the checkout under `vite dev` |
-| Settings | `GENUI_MCP_URL`, the MCP endpoint of the generative UI backend. `MQTT_WS_PORT`, the port the browser reaches the broker's WebSocket on, at the host of the page (9001 if unset); or `MQTT_WS_URL`, the whole address, for a broker behind a proxy (`wss://…`); or `MQTT_WSS_PATH`, for a page over HTTPS only, a path at the origin of the page that the proxy in front of the app forwards to the broker (`/mqtt`, the Margo app). `APP_MCP_SERVERS`, optional: further MCP servers whose tools the chat has too, as `name=address` separated by commas (`ultimaker=http://ultimaker-api:8080/mcp`); the app draws nothing for their results, the answer says them, and a chat switches each of them off and on under "Tools" in its message field. `OPCUA_MCP_URL` and `OPCUA_ADAPTER_URL`, the MCP endpoint and the API of the [OPC UA adapter](../../source/Pleiades.Playground.OpcUa.Adapter/README.md); empty, the chat has no OPC UA. The language models of the chat, see below. |
+| Settings | `GENUI_MCP_URL`, the MCP endpoint of the generative UI backend. `MQTT_WS_PORT`, the port the browser reaches the broker's WebSocket on, at the host of the page (9001 if unset); or `MQTT_WS_URL`, the whole address, for a broker behind a proxy (`wss://…`); or `MQTT_WSS_PATH`, for a page over HTTPS only, a path at the origin of the page that the proxy in front of the app forwards to the broker (`/mqtt`, the Margo app). `APP_MCP_SERVERS`, optional: further MCP servers whose tools the chat has too, as `name=address` separated by commas (`ultimaker=http://ultimaker-api:8080/mcp`); the app draws nothing for their results but the drink card of `juicebar`, the answer says them, and a chat switches each of them off and on under "Tools" in its message field. `OPCUA_MCP_URL` and `OPCUA_ADAPTER_URL`, the MCP endpoint and the API of the [OPC UA adapter](../../source/Pleiades.Playground.OpcUa.Adapter/README.md); empty, the chat has no OPC UA. `SITES_API_URL`, the REST endpoints of the [Sites API](../../source/Pleiades.Playground.Sites.Api/README.md) that Home writes to (http://localhost:5540 if unset); empty, "Add machine", "Move…" and "Remove from site" say that there is none. The language models of the chat, see below. `HUB_MQTT_URL` and `HUB_APP_URL` for the registration at the [Pleiades Hub](#pleiades-hub): the demo stack sets both, and an empty `HUB_MQTT_URL` in `.env` switches the registration off. |
 
 ## Language models
 
@@ -120,10 +165,29 @@ device, set `APP_BIND=0.0.0.0`, and only in a network you trust.
 
 ## Dictation
 
-With a speech-to-text model at the gateway, the chat field has a microphone. Press it, speak, press it
-again: a spinner shows while the model writes down what was said, and the text goes into the field, after
-what is already there. It is sent like a typed question, when you send it. After two minutes the recording
-stops by itself and is written down the same way. The model hears the language itself. It also gets the
+With a speech-to-text model at the gateway, the chat field has a microphone. Tap it, speak, tap it again;
+or hold it while you speak and let go, as on a tablet. A press shorter than 0.4 s is a tap
+(`dictation-press.ts`); Enter or the space bar on the microphone is a tap too. While it records, the second
+line of the field says so, on the left, where a finger on the microphone does not cover it: bars that move
+with the loudness of the microphone (`dictation-level.ts`), the time, and what ends the recording, "Let go to
+finish" or "Tap ■ to finish". What was said so far stands in the field meanwhile, dimmed and in italics: as
+its placeholder when the field is empty, under what is written otherwise. Then the line says that the model
+writes down what was said, and the text goes into the field, after what is already there. It is sent like a
+typed question, when you send it. After two minutes the recording stops by itself and is written down the
+same way.
+
+What was said so far is a draft: the recording so far, written down again about every two seconds
+(`dictation-draft.ts`), one request at a time, by the same model. The gateway has no model that writes while
+one speaks, and the stream of the transcription model does not come through it: LiteLLM collects it and
+answers once. A draft may change as the model hears more. A draft still on its way when the recording ends
+is called off, at the gateway too, and all of the recording is written down once more; that text goes into
+the field. So twenty seconds of speech ask the model about ten times, each time a little longer. As the
+audio of the drafts grows with the square of the length, drafts stop after 30 s of recording: the last one
+stays, the line still shows that the microphone listens, and the end writes down all of it as before. Every
+field of the app shares the key of the gateway, which takes two requests at once, so the server writes one
+draft at a time for all fields together (`/api/transcribe?draft`): a draft that finds one on its way is
+answered 429 and comes again two seconds later, and the other request stays for the chat and for whole
+recordings. The names of the machines for the prompt are kept for a minute. The model hears the language itself. It also gets the
 names of the machines from the backend as its prompt, their serial numbers, models and machine ids, so that
 it writes "P-04" as the stack spells it.
 
@@ -132,11 +196,15 @@ of the hackathon `openai/gpt-transcribe`. The gateway passes it on as OpenAI's a
 (`POST /audio/transcriptions`). Where the gateway lists none, the field has no microphone, and the chat works
 as before.
 
-The browser records (`useAudioRecorder` of TanStack AI) and sends the recording to `/api/transcribe`, which
+The browser records (`recorder.ts`) and sends the recording to `/api/transcribe`, which
 calls the model with the key of the gateway (`generateTranscription`). The route reads at most 32 MiB, as the
 agent harness does, and answers a larger request with 413. A browser lets a page use the
 microphone only over https or on `localhost`; elsewhere the microphone says so when pressed. The recording
-is not kept.
+is not kept, and a field that goes with another chat lets go of the microphone, also of one the browser is
+still opening. The recorder is our own and
+not `useAudioRecorder` of TanStack AI: the bars read the level from the stream that records, and that
+recorder keeps its stream to itself. A second request for the microphone would mute the first one in Safari
+on iOS ([WebKit bug 179363](https://bugs.webkit.org/show_bug.cgi?id=179363)), on the tablet dictation is held on.
 
 ## Develop
 
@@ -149,11 +217,139 @@ pnpm --filter @pleiades/app test
 The development server listens on <http://localhost:3000/> and reads from <http://localhost:5520/mcp>, where
 the backend of the running demo stack answers.
 
+It serves the app alone. To work on a showcase, start it with the showcases, and build with them the same
+way; `src/showcases/` under [What is where](#what-is-where) says what a showcase is:
+
+```bash
+APP_SHOWCASES=true pnpm --filter @pleiades/app dev      # PowerShell: $env:APP_SHOWCASES = "true" first
+APP_SHOWCASES=true pnpm --filter @pleiades/app build
+```
+
+## Pleiades Hub
+
+The Pleiades Hub (repository `umati/pleiades-hub`) is the frame of the Pleiades system: one page with a
+header, for the app launcher and the user menu, and below it the apps in iframes. Apps register at it over
+MQTT, at the broker of this repository, with the SDK `@pleiades/hub-sdk` from the hub's repository.
+
+For the server the registration is opt-in. With `HUB_MQTT_URL` set, the server of the app registers when it
+starts, with one app. Without the variable, or with an empty one, nothing connects, and the app behaves as
+before. `HUB_REGISTRATION=false` switches the registration off as well, whatever `HUB_MQTT_URL` says: the
+Margo app needs that switch, because a Margo client may leave an empty setting out of the environment, see
+[margo/README.md](../../margo/README.md#pleiades-hub). The demo stack sets the variable, see [In the demo stack](#in-the-demo-stack).
+
+The start is a plugin of Nitro, the server under TanStack Start: `src/hub/plugin.ts`, which `vite.config.ts`
+names. Nitro runs it once when the server starts, in development and in the built server, so the app is in
+the hub before anyone opens a page.
+
+| Variable | Default of the server | In the demo stack | Meaning |
+|---|---|---|---|
+| `HUB_MQTT_URL` | empty: no registration | `mqtt://broker:1883`, the broker of the stack | The MQTT broker at which the app registers: an `mqtt`, `mqtts`, `ws` or `wss` URL. In development the broker of this repository's stack, `mqtt://localhost:1883` |
+| `HUB_REGISTRATION` | empty: `HUB_MQTT_URL` decides | not set | `false` switches the registration off; `true` or empty leaves it to `HUB_MQTT_URL`; any other value is an error at the start |
+| `HUB_APP_URL` | `http://localhost:3000/` | `http://localhost:5600/`, with the port of `APP_PORT` | The address under which a user's browser reaches the app: an absolute `http` or `https` URL, or a path that starts with `/`, such as `/playground/`, which the hub resolves against its own address. It should end with `/`, because the icon link is relative to it. Ignored without `HUB_MQTT_URL` |
+
+With `HUB_MQTT_URL` set, an invalid value of either variable is an error at the start. The built server
+prints one line that names the variable, never its value, and ends with exit code 1. The development server
+prints the same line and runs on without the registration: Nitro starts its server process again whenever
+it ends.
+
+The client id in the topics of the hub is `pleiades-playground`, and the app it registers is this one:
+
+```json
+{
+  "id": "pleiades-playground",
+  "label": { "en": "Playground", "de": "Playground" },
+  "description": {
+    "en": "What every machine does now, with a chat for questions",
+    "de": "Was jede Maschine gerade tut, mit einem Chat für Fragen"
+  },
+  "icon": "hub-icon.svg",
+  "url": "http://localhost:3000/"
+}
+```
+
+`url` is the value of `HUB_APP_URL`, here the default of the server; from the demo stack it is
+`http://localhost:5600/`. Label and description stand in the code (`src/hub/settings.ts`), in English and
+German; the hub shows them in the language the user chose there.
+
+The icon is an SVG drawn for this app, `public/hub-icon.svg`, which the server of the app serves as
+`/hub-icon.svg`. It is registered as the relative link `hub-icon.svg`, which the hub resolves against the
+address of the app: `http://localhost:3000/hub-icon.svg` in development, `/playground/hub-icon.svg` behind
+the path `/playground/`. Without the `/` at its end, `/playground` would send the hub to `/hub-icon.svg`.
+The hub shows the icon as an image, so the file brings its own colours and uses no `currentColor`; if it
+cannot be loaded, the hub shows the initials of the label.
+
+A broker that cannot be reached does not stop the app: the SDK retries every two seconds, and the server
+logs each distinct error once. When the server stops, the hub drops the app. On `SIGTERM` and `SIGINT` Nitro
+closes the HTTP server first and then runs the sign-off of the SDK, so a request that is still open, a chat
+that streams for example, delays the sign-off by up to five seconds. If the process dies without it, the
+broker publishes the Last Will of the client, and the hub drops the app as well. That is also the path where
+`CI` or `TEST` is set in the environment: the server then ends at the signal without closing.
+
+The messages travel below the first level `hub/` of the [MQTT binding](../../contracts/mqtt/README.md).
+Their topics and payloads are defined in the repository of the hub, in its `contracts/mqtt/README.md`.
+
+The SDK is not on npmjs.org. It is checked in as a tarball, `vendor/pleiades-hub-sdk-0.1.2.tgz`, licensed
+under Apache-2.0; the tarball includes its `LICENSE` file. [`vendor/README.md`](../../vendor/README.md) names
+its version, origin and checksum. The catalog in `pnpm-workspace.yaml` refers to it
+(`"@pleiades/hub-sdk": file:vendor/pleiades-hub-sdk-0.1.2.tgz`), and
+`package.json` says `"catalog:"`, like every other dependency. The decision and what follows from it:
+[ADR-0021](../../docs/adr/0021-hub-registration.md).
+
+### In the demo stack
+
+In the demo stack the registration is on. `compose.yaml` sets both variables for the `app` container, so the
+app registers at the broker of the same stack, `mqtt://broker:1883` (the service `broker`), with the address
+`http://localhost:5600/`. The address follows `APP_PORT`: with `APP_PORT=5700` it is
+`http://localhost:5700/`. In `compose.yaml` the app does not wait for the broker: the SDK retries until the
+broker answers.
+
+The hub is not part of the stack. Start the hub from its repository; it then answers on
+<http://localhost:3300/>, and it reaches the broker of this stack at the port the stack publishes on the
+host (`MQTT_PORT`, 1883). Pleiades Documentation, from its repository, does the same. Without a hub the
+registration costs one MQTT connection and one message at the start: nobody asks on `hub/discover`.
+
+Both variables stand in [`.env.example`](../../.env.example). A line in `.env` changes one, and
+`docker compose up -d app` creates the app again with it:
+
+- `HUB_MQTT_URL=`, the line with an empty value, switches the registration off: the container gets an empty
+  variable, and the app does not register. Without the line the stack keeps its default.
+- `HUB_APP_URL` has to be set whenever a browser reaches the app under another address than
+  `http://localhost:<APP_PORT>/`: under another host name, for example when `APP_BIND` opens the app to the
+  network, behind a reverse proxy, or under a path of the hub such as `/playground/`. The hub hands the
+  address to the browser of each user as it is, and `localhost` there is the computer of that user. With an
+  empty value, or without the line, the stack keeps its default.
+
+An invalid value is an error at the start here as well: the `app` container runs the built server, which
+prints the line that names the variable and ends. `docker compose logs app` shows the line.
+
+### Try it in development
+
+It needs two things beside the app: the broker of this repository's stack, which the running demo stack
+publishes on `localhost:1883`, and the hub (`pnpm dev` in a checkout of `pleiades-hub`,
+<http://localhost:3300/>). The app of the running stack registers at that broker as well, under the same
+client id as the development server, and the hub keeps one list for a client id, the last one it got: with
+both running, "Playground" opens the one or the other. So stop the app of the stack first,
+`docker compose stop app`, and start it again afterwards (`docker compose start app`). Then start the app
+with the variable set:
+
+```bash
+HUB_MQTT_URL=mqtt://localhost:1883 pnpm --filter @pleiades/app dev
+```
+
+In PowerShell, set the variable first: `$env:HUB_MQTT_URL = "mqtt://localhost:1883"`. It then stays set in
+that terminal, and `compose.yaml` reads a variable of the same name: start the stack from another terminal,
+or the `app` container gets `localhost` as its broker.
+
+Within seconds the app appears in the launchpad of the hub, as "Playground", and opens there in an iframe.
+`HUB_APP_URL` keeps its default in development: it is the address of the development server.
+
 ## What is where
 
 - `src/routes/`: one file per route. `__root.tsx` is the document and the layout with sidebar, header and chat,
   and holds what a tooltip and a toast need at the root (`TooltipProvider`, `Toaster`);
-  `index.tsx` is Home, `machines.$machine.tsx` the page of a machine, `charts.tsx` the last hours of every
+  `index.tsx` is Home, `sites.index.tsx` the address the list of the sites had before, which leads there, `sites.$machine.tsx` the page of a machine and `machines.$machine.tsx`
+  the old address of it, which leads there, `halls.tsx` the plans of the halls (drawn by
+  `packages/cards/src/site/hall-plan.tsx`), `charts.tsx` the last hours of every
   machine as charts (drawn by `src/charts/state-tiles.tsx`), `pages.index.tsx` the list of the pages kept
   in this browser, `pages.$page.tsx` one of them and `pages.open.tsx` one opened from a link; `health.ts`,
   `api/harness/$.ts` and
@@ -170,14 +366,21 @@ the backend of the running demo stack answers.
 - `src/pages/`: the pages kept from the chat. `recipe.ts` is the recipe and its schema (zod): its shape
   and its size, which is all that is checked, also of a recipe from outside. `store.ts` keeps the pages in
   the `localStorage` of the browser under one key, `pleiades-playground.pages.v1`, and is the only way to
-  them: `listPages`, `getPage`, `savePage`, `renamePage`, `pinPage`, `unpinPage`, `deletePage`, and
-  `usePages` for a component that follows every change. `link.ts` writes a recipe into one search
+  them: `listPages`, `getPage`, `savePage`, `renamePage`, `pinPage`, `unpinPage`, `removePart`, `movePart`,
+  `putPartBack` (the undo of `removePart`), `addPart`, `deletePage`, and `usePages` for a component that
+  follows every change. `part-controls.tsx` is what "Edit" shows above a part, and `shown-parts.ts` gives each
+  part of the recipe as it is now the answer the loader already has for it. `add-card.tsx` is "Add a card"
+  and its dialog; `card-choices.ts` the server function behind it, which reads the tools of the servers a page
+  asks with their input schemas, and the machines; `add-part.ts` what the form asks for a card, read from its schema (a
+  machine, a whole number in its range, never the time zone), the part it makes, and why a part is not added
+  (`cannotAdd`). A card with a required argument the form does not know is offered as off, with why. `link.ts` writes a recipe into one search
   parameter, `r`, and reads it back (`encodeRecipe`, `decodeRecipe`, `linkOf`): JSON as UTF-8 in base64url,
   at most `MAX_PARAM_LENGTH` (8,000) characters, and what is not exactly a recipe (`recipeOf`) is null.
   `share-page.tsx` is "Share" in the head of a kept page, `column.tsx` the column that a kept page and a page
   opened from a link share. `call-part.ts` is the server function that calls
-  the tool of a part, only a tool the chat draws (`parts.ts`), with the time zone of the browser, and
-  returns what the chat hands to `draw`. `drawn-part.tsx` asks the parts of a recipe for a loader
+  the tool of a part at the server that has it (`serverOfTool` in `src/chat/mcp-servers.ts`), only a tool the
+  chat draws and its server marks as reading (`parts.ts`), with the time zone of the browser, and returns
+  what the chat hands to `draw`. `drawn-part.tsx` asks the parts of a recipe for a loader
   (`answerParts`) and draws one (`DrawnPart`): the card of the chat, or what is missing. `pinned.ts`
   makes the entries of the sidebar for the pinned pages, `listed.ts` the rows of the group for the others
   and the row that is marked: none for a pinned page, the list of the pages or a page opened from a link. A route that opens a link is input from outside at its
@@ -188,17 +391,48 @@ the backend of the running demo stack answers.
   calls the chat drew a result for, in their order, without the time zone, the same call once, and the
   question as its title. An answer is everything the model said after one question, in more than one
   message; an answer with more calls than a page holds (12) keeps the first 12, and the row says so.
+  `proposal.ts` checks a page the language model proposes (`proposePage`): only tools a page can call, the
+  schema of a part, no time zone, the same part once, at most 12, and each part left out with a reason the
+  model can act on; it also reads the recipe back from the result for the chat (`proposedRecipe`).
+  `kept-proposals.ts` notes which page a proposal was kept as, by the id of its tool call, under a key of its
+  own, `pleiades-playground.proposals.v1`: so a proposal still says "Saved as page" after a reload and after the
+  page was renamed or its parts changed, and does not offer to keep a second page.
 - `src/routeTree.gen.ts`: written from the route files and not in the repository, so that two branches with
   a page each have nothing to merge in it. `pnpm install` and `pnpm typecheck` write it
   (`route-tree.mjs`), and so do the development server and the build. Never edit it. TanStack advises to
   commit this file; here everything that needs it writes it first.
+- `src/showcases/`: what is made for one demo or one fair, and is in a build only where `APP_SHOWCASES` is
+  set ([ADR-0018](../../docs/adr/0018-a-showcase-is-built-in-on-request-and-only-adds.md)). A folder below
+  it is a showcase: `titan/` is the assistant you talk
+  to, the page `/titan`, with a [guide](src/showcases/titan/README.md) of its own. `where-is-my-job/` holds
+  the made-up orders WI-… of the page `/where-is-my-job`, "Where is My Job?", a page for discussion that
+  follows an order across the machines, with the machines of one step of manufacturing side by side. Its view,
+  map and panels, the grouping of job orders, the steps and `getFloor`, which reads its values, are of the app,
+  in `src/where-is-my-job/`, and take the made-up orders through `extras.ts`. The pages of the showcases, and their
+  server routes, are the route files under `src/routes/(showcases)/`; the brackets make a folder that adds
+  nothing to an address, so `(showcases)/titan.tsx` answers at `/titan`. A page belongs to the
+  showcase its name begins with: `titan.tsx`, `titan.faces.tsx` and `titan/faces.tsx` are pages of
+  `showcases/titan/`. A build without the setting leaves that folder out
+  (`vite.config.ts`): the router does not know the pages, nothing imports the folder of a showcase, and
+  `.output` has nothing of one, so neither has the image. There is no switch while the app runs.
+  `rule.test.ts` fails when a file of the app reads from a showcase or names the address of one of its pages,
+  and when a showcase, its folder or one of its pages, reads from another. It resolves every import to a path
+  from `src/` first, so `../other/data.ts` counts as `@/showcases/other/data.ts` does. The typecheck reads
+  every route, with the showcases (`route-tree.mjs`). After a build without the setting, the route tree on
+  disk has no showcase routes, and the editor or a plain `tsc` reports `TS2345` in the route files of the
+  showcases (`'"/(showcases)/titan"' is not assignable to parameter of type 'keyof FileRoutesByPath'`).
+  `pnpm typecheck` or `node route-tree.mjs` writes the whole tree again, and the error is gone.
 - `src/cards/`: a folder for each card, named like the card. `machine/chat.tsx` is the machine card in the
   chat: what a call of each of its tools is called, what the chat draws for a result (`results.ts` checks it
   against the contract), and which tool only a card calls. Which value of the binding is which state, the
   signs and the wording come from [`@pleiades/cards`](../../packages/cards/README.md). `measurement/chat.tsx`
   is the measurement card in the chat: the cards of `genui_measurement_list`, without graphs. `opcua/chat.tsx`
   holds the cards of the OPC UA adapter: the server list, a mapping, a proposal and the endpoints, and
-  `results.ts` checks what its tools give back.
+  `results.ts` checks what its tools give back. `juicebar/chat.tsx` is the drink card of the
+  [juice bar](../../source/Pleiades.Playground.JuiceBar.Api/README.md), for the result of
+  `juicebar_drinks_list`: a drink to pick, its glass (`glass.tsx`, moving by `glass.css`), and a button that
+  orders it at once over the server functions of `src/juicebar/orders.ts`; `follow.ts` reads the order again
+  until it is done, also after a call that did not reach the server of the app.
 - `src/machines/`: what the pages and the chat both take of a machine. `get-machines.ts` holds the server
   functions that call the backend as a typed MCP client, `card-tools.ts` the names of the tools only a card
   calls, `machine-item.tsx` draws a machine as a row or a tile. A card folder imports from here, never the
@@ -207,7 +441,19 @@ the backend of the running demo stack answers.
   over WebSocket, which only subscribes; `broker-address.ts` the server function that says where the broker
   is. `messages.ts` reads what the binding publishes, `machines.ts` and `measurements.ts` lay a message, and
   the passing of time, onto what the backend read, by the rules of `genui-mcp`; each has its tests.
+  `sites.ts` keeps the machines of the sites live and counts them again by the rules of `genui_site_list`.
   `src/hooks/use-live.ts` puts it together for a route: `useLive(loaded, live)`.
+- `src/sites/`: what Home chooses to show of the sites. `filter.ts` groups the values of `genui_site_list` by site
+  and hall, keeps what "Needs you" and a search ask for, cuts the pages, and adds up nothing; `moved.ts` says where an old address of the page of a
+  machine or of the list of the sites leads. `unplaced.ts` names the machines on no site for the bar; `row-actions.tsx` is "Add machine" and the menu of a row, `place-dialog.tsx` the dialog of "Add machine" and "Move…"; `sites-api.ts` holds the server functions that write, `placements.ts` their steps against the Sites API and `placing.ts` their rules.
+- `src/placement/`: where machines go, as the chat proposes it. `proposal.ts` checks a proposal against the list
+  of the sites (`checkPlacement`): each machine by its id, by a short name that fits one machine only, or as a
+  machine that sent no data with what the person said it is; the site and the hall by id, by name or by the closest
+  name, or new; and the words the model passes on. `confirmed.ts` notes what a person confirmed, by the id of the
+  tool call, under the key `pleiades-playground.placements.v1`, so the card says it after a reload;
+  `read-sites.ts` reads the sites for the tool on the server. The card of the chat is built of the fields of Home
+  and of `src/sites/done-step.tsx` (an open step and a done one) and `src/sites/place-value.ts` (whether a place is
+  chosen whole).
 - `src/chat/`: `assistant.server.ts` is the agent harness ([TanStack AI](https://tanstack.com/ai), experimental)
   with the tools of the backend and one adapter per model; chats live in memory and are gone after a restart.
   `mcp-servers.ts` reads the servers whose tools the chat has and holds a chat to the ones it left on,
@@ -218,15 +464,26 @@ the backend of the running demo stack answers.
   which also cancels the turn in the harness (`createHarnessClient(...).cancel()`), and holds its head:
   the title of the view, or in a chat a way back and the name of the chat; `chat-name.ts` next to it says
   what a chat is called (`chatName`, `nameOfQuestion`), `ask.ts` which chat the panel shows, in the URL
-  (`?chat=`: `new` is the list), and where the first question of a new chat waits,
+  (`?chat=`: `all` is the list, `new` a new chat with no question yet), and where the first question of a new
+  chat waits,
   `save-as-page.tsx` the row under an answer with "Save as page" (chrome of the app, never part of a card),
-  `dictate.tsx` the microphone in its field and `dictation.server.ts` the model behind it,
+  `propose-page.ts` the tool of the app with which the model proposes a page, `app_page_propose`, and
+  `proposed-page.tsx` the proposal the chat draws for its result, `propose-placement.ts` the tool with which it
+  proposes where machines go, `app_placement_propose`, and `proposed-placement.tsx` the card of steps the chat
+  draws for it,
+  `dictate.tsx` the microphone in its field and its line, `recorder.ts` the recording and `dictation.server.ts`
+  the model behind it,
   `cards.tsx` lists the cards the chat knows, one line for a card: the chat takes from it what it draws for
-  which tool, and its server which tools a language model does not get. `tool-results.ts` says what a card
-  may say about a tool, `blocks.ts` turns an answer into blocks, and `answer.tsx` draws what the model writes
+  which tool, its server which tools a language model does not get, and the proposal of a page which tools a
+  page can call. `tool-results.ts` says what a card may say about a tool, `blocks.ts` turns an answer into blocks, and `answer.tsx` draws what the model writes
   ([TanStack Markdown](https://tanstack.com/markdown)).
+- `src/hub/`: the registration at the [Pleiades Hub](#pleiades-hub). `settings.ts` reads the two variables
+  and holds the registration; it is pure, and `settings.test.ts` tests it. `registration.server.ts` is
+  server-only and starts the client of the SDK exactly once per process: a singleton, so a hot reload of the
+  development server opens no second connection. `plugin.ts` is the plugin of Nitro that calls it when the
+  server starts and signs the app off when the server closes. The icon is `public/hub-icon.svg`.
 - `src/opcua/`: what the chat and its cards take of the OPC UA adapter. `commands.ts` holds the slash
-  commands and `/help`, `adapter.ts` the server functions behind the buttons that add and remove a machine.
+  commands and `/help`, and turns a tool of an MCP server into a command (`toolCommand`), `adapter.ts` the server functions behind the buttons that add and remove a machine.
   The adapter's tools are a second MCP server of the harness, and its part of the instructions stands in
   `assistant.server.ts`; while the adapter does not answer, the chat offers none of it.
 - The [shadcn/ui](https://ui.shadcn.com) components come from [`packages/ui`](../../packages/ui/README.md),
@@ -243,3 +500,71 @@ the backend of the running demo stack answers.
 - `src/styles.css`: Tailwind and the font. The theme of the preset, light only, comes from `@pleiades/ui`
   and the brands with it, the chart and state colours from `@pleiades/cards`, so a card looks the same
   wherever it is drawn.
+
+## Machine documentation in chat
+
+Run the external documentation API and MCP service, then append an entry to `APP_MCP_SERVERS`:
+
+```dotenv
+# Playground running locally:
+APP_MCP_SERVERS=docs=http://127.0.0.1:3202/mcp
+# Playground in Docker, documentation service on the host:
+# APP_MCP_SERVERS=docs=http://host.docker.internal:3202/mcp
+```
+
+Keep any existing entries, separated by commas. Restart the local app, or recreate the Docker app with
+`docker compose up -d --no-deps app` so it receives the new environment. The external MCP service must
+listen on an address reachable by that runtime and accept its Host header; loopback-only services cannot
+be assumed reachable from another container. The standard demo has no documentation dependency.
+
+Ask about a manual, for example “Which four technological machining operations does CYCLE832 distinguish?”.
+The chat uses `docs_search` and `docs_read_page`, then displays verified `docs_answer` cards with clickable evidence.
+Selecting a card evidence source opens its original physical page in a continuous PDF.js viewer aligned with the
+documentation service: scroll through pages, enter a page number, zoom, download and search literal text.
+Only nearby pages allocate canvases and text layers; resizing and zoom preserve the current page position. Search combines native PDF text and indexed OCR page matches; only native text can
+be highlighted. Non-PDF card sources use the extracted-page viewer. The backend reads metadata and
+bounded binary resources through MCP and serves PDF bytes to the browser, including HTTP ranges.
+Missing, changed or unavailable sources show an error and require a new search.
+See [ADR-0019](../../docs/adr/0019-documentation-sources-in-chat.md) and the [external documentation contract](../../contracts/docs/README.md).
+The Playground never calls the documentation REST API or accesses its database.
+
+
+### Documentation answer cards
+
+The updated documentation MCP service exposes `docs_answer`. Its result uses the Playground card
+catalogue: source warnings appear first in their original wording, then the answer and one evidence chip.
+The chip opens an inline preview with title, known chapter/version, page and manufacturer/customer badge.
+**Open in document** opens the PDF viewer at the quoted passage and highlights matching native text
+across spans. Translucent evidence rectangles sit above the original canvas and below the selectable text
+layer, preserving readable glyphs. Search changes update these rectangles without rerendering the canvas.
+Scanned pages without positional OCR still open at the cited page and explain why no exact mark is shown.
+
+Documentation answers use cards exclusively. The service must provide `docs_answer`; unsupported or
+failed evidence produces a no-evidence card. The old prose/source-list presentation and runtime toggle
+have been removed. Older source-only chat turns show an unavailable card; ask again to obtain a verified
+answer. See [ADR-0024](../../docs/adr/0024-documentation-cards-only.md).
+`APP_DOCUMENTATION_PACKAGE` optionally pins a deployment to a machine's documentation package. Otherwise
+name/select the package in the question; the card path does not search all packages to guess a machine.
+No new key is required. The package scope is a runtime app setting; the browser cannot choose an upstream address.
+
+The earlier [migration criteria](../../docs/adr/0022-documentation-answer-cards.md) are historical;
+[ADR-0024](../../docs/adr/0024-documentation-cards-only.md) retires the old presentation. Existing source tools remain.
+
+When a package is unknown, `docs_list_packages` discovers package and filename metadata without
+content search or embedding requests. A unique document reference or the sole package in a complete
+listing can resolve the selection; ambiguous packages require clarification. The content search remains
+scoped to that package. An unknown package alone does not mean the document is unavailable.
+
+### Conflicting documentation
+
+`docs_review` retrieves candidate pages from every current file in the selected package without a
+category filter, including conflicting manufacturer/customer sources and different passages on the same
+page. The chat model compares their meaning and conditions; MCP verifies literal evidence, receipt
+coverage and source freshness. Lexical terms limit recall; no contradiction found is not a guarantee.
+Cards show explicit no-contradiction, conflict or incomplete-review states. Missing indexing, failed
+reads, caps, stale reviews and old stored answers cannot claim completed review. Each conflicting
+alternative has its own expandable source and PDF navigation. Multiple alternatives remain accessible.
+Warnings stay first and verbatim. Conflict cards suppress the ordinary action list. Recommendations
+require completed review and an explicit supported rule; otherwise technical clarification is required.
+No approval is inferred from classification, timestamps, author counts or a user's choice. See
+[ADR-0023](../../docs/adr/0023-documentation-conflict-review.md).

@@ -27,6 +27,13 @@ export const instant = z.iso.datetime({ offset: true })
 export const machineId = z.string().regex(/^[^/+#]+$/)
 
 /**
+ * How a caller names one machine to a tool that answers a question about it: by its id, or as people
+ * call it. The backend finds the machine; nobody has to list the machines first to learn its id.
+ */
+export const MACHINE_NAMING =
+  "The machine: its id, <manufacturer>_<model>_<serial number>, for example alcyone-machines_AX-400_P-04, or what people call it, such as its serial number (P-04) or its model and serial number (AX-400 P-04). A name that fits several machines is refused, with their ids."
+
+/**
  * Where each reading of a machine is kept, below `machines/{machineId}/`: the topics of the umati data
  * model. The backend reads the stored values of these topics, and a page that is live hears them at
  * the broker. The state and the operation mode are the two fields of the snapshot `State/Status`: see
@@ -54,6 +61,7 @@ export const IDENTITY_PATHS = {
   manufacturer: "umati/Identification/Manufacturer",
   model: "umati/Identification/Model",
   serialNumber: "umati/Identification/SerialNumber",
+  deviceClass: "umati/Identification/DeviceClass",
 } as const
 
 /** Where the alerts and notifications of a machine are published, as CloudEvents, below `machines/{machineId}/`. */
@@ -109,6 +117,11 @@ export const identity = z.object({
   manufacturer: z.string().nullable(),
   model: z.string().nullable(),
   serialNumber: z.string().nullable(),
+  deviceClass: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("The kind of machine as the machine names it, for example Machining centre; absent or null where it names none."),
 })
 export type Identity = z.infer<typeof identity>
 
@@ -193,6 +206,42 @@ export const spanList = z.object({
   spans: z.array(span).describe("The states between `from` and `to`, oldest first and without a gap."),
 })
 export type SpanList = z.infer<typeof spanList>
+
+/**
+ * A job order as the stack knows it from its events: what is ordered (an entry of
+ * `JobMonitoring/JobOrders`) and what came of it from its start (an entry of
+ * `JobMonitoring/JobOrderResults`). Quantities are counts.
+ */
+export const jobOrderEntry = z.object({
+  machine: machineId.describe("The machine id of the machine the job order is on."),
+  jobOrderId: z.string(),
+  state: z
+    .string()
+    .describe("NotAllowedToStart, AllowedToStart, Running, Interrupted, Ended or Aborted (ISA-95); empty if unknown."),
+  changedAt: instant.describe("When its last event happened."),
+  jobName: z.string().nullable(),
+  workMaster: z.string().nullable().describe("The work master it carries out."),
+  orderNumbers: z.array(z.string()).describe("The order numbers of the ERP it belongs to; empty ones are left out."),
+  runsPlanned: z.number().nullable(),
+  plannedStart: instant.nullable(),
+  plannedEnd: instant.nullable(),
+  start: instant.nullable().describe("When it started; null before its start, as every field of its result."),
+  end: instant.nullable().describe("When it ended or was aborted."),
+  produced: z.number().nullable().describe("Parts produced."),
+  good: z.number().nullable().describe("Of those, the good ones."),
+  result: z.string().nullable().describe("Unknown until it ends, then Successful or Unsuccessful."),
+})
+export type JobOrderEntry = z.infer<typeof jobOrderEntry>
+
+/** The job orders on the lists of the machines. */
+export const jobOrderList = z.object({
+  asOf: instant,
+  windowSeconds: z.number().describe("How far back the last event of a job order may lie."),
+  jobOrders: z
+    .array(jobOrderEntry)
+    .describe("Every job order still on the list of its machine, by machine, then the oldest change first."),
+})
+export type JobOrderList = z.infer<typeof jobOrderList>
 
 /** How many spans a band has room for: about one for each pixel of its width. */
 export const BAND_SLOTS = 720

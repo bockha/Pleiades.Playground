@@ -28,6 +28,30 @@ internal sealed class ServerCertificateChangedException : Exception
     }
 }
 
+/// <summary>
+/// The certificate check between the adapter and a server failed: the server presents a certificate the
+/// adapter rejects, or the server rejects the one of the adapter. Trying again does not help.
+/// </summary>
+internal sealed class ServerCertificateRejectedException : Exception
+{
+    /// <summary>Creates the exception.</summary>
+    public ServerCertificateRejectedException()
+    {
+    }
+
+    /// <summary>Creates the exception with a message.</summary>
+    public ServerCertificateRejectedException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>Creates the exception with a message and a cause.</summary>
+    public ServerCertificateRejectedException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 /// <summary>The endpoint a registration names is not offered by the server.</summary>
 internal sealed class EndpointNotOfferedException : Exception
 {
@@ -83,6 +107,12 @@ internal sealed class OpcUaClient : ISessionConnector
     /// <summary>Creates the client on the services of the OPC UA stack.</summary>
     /// <summary>How long a connect may take before it fails.</summary>
     public static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The name of the adapter as an OPC UA application. A server shows its certificate under this name, so a
+    /// person finds it there to trust it.
+    /// </summary>
+    public const string ApplicationName = "Pleiades Playground OPC UA Adapter";
 
     public OpcUaClient(IOpcUaDiscoveryService discovery, IManagedSessionFactory sessions, CredentialStore credentials)
     {
@@ -183,23 +213,77 @@ internal sealed class OpcUaClient : ISessionConnector
         // ConnectTimeout fails, so the back-off of the session and the LastError of the machine take over.
         using var limited = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         limited.CancelAfter(ConnectTimeout);
+        // A refused user or a rejected certificate ends the connect at once, with its reason (RefusalPolicy).
         var configured = new ConfiguredEndpoint(null, selected, null);
         try
         {
-            var session = credential is null
-                ? await _sessions.ConnectAsync(configured, limited.Token).ConfigureAwait(false)
-                : await _sessions.ConnectAsync(
-                    configured,
-                    builder => builder
-                        .WithUserIdentity(new UserIdentity(credential.User, Encoding.UTF8.GetBytes(credential.Password)))
-                        .WithReconnectPolicy(new RefusedUserPolicy()),
-                    limited.Token).ConfigureAwait(false);
+            var session = await _sessions.ConnectAsync(
+                configured,
+                builder =>
+                {
+                    builder.WithReconnectPolicy(new RefusalPolicy());
+                    if (credential is not null)
+                    {
+                        builder.WithUserIdentity(new UserIdentity(credential.User, Encoding.UTF8.GetBytes(credential.Password)));
+                    }
+                },
+                limited.Token).ConfigureAwait(false);
             return (session, thumbprint);
+        }
+        catch (ServiceResultException exception) when (RefusalPolicy.IsRejectedCertificate(exception.StatusCode)
+            || RefusalPolicy.IsUntrustedClient(exception.StatusCode))
+        {
+            throw new ServerCertificateRejectedException(
+                RejectedCertificate(endpoint.Url, exception, $"{endpoint.SecurityMode} with {endpoint.SecurityPolicy}"), exception);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TimeoutException($"The server at {endpoint.Url} did not open a session within {ConnectTimeout.TotalSeconds:0} seconds.");
         }
+    }
+
+    /// <summary>What a person reads when the certificate check with a server failed.</summary>
+    /// <param name="url">The address of the server.</param>
+    /// <param name="exception">The refusal.</param>
+    /// <param name="security">The security of the endpoint, for example <c>SignAndEncrypt with Basic256Sha256</c>, or null.</param>
+    internal static string RejectedCertificate(string url, ServiceResultException exception, string? security = null)
+    {
+        var status = StatusCode.LookupSymbolicId(exception.StatusCode.Code) ?? exception.StatusCode.ToString();
+        var text = exception.LocalizedText.Text is { Length: > 0 } localized ? localized : exception.Message;
+        if (RefusalPolicy.IsUntrustedClient(exception.StatusCode))
+        {
+            return RefusedClient(url, status, RefusalPolicy.ReasonIn(text, status), security);
+        }
+
+        return $"The certificate check with the server at {url} failed with {status}: {text} " +
+            "Trying again does not help until the certificate of the server is fixed, or the server trusts the certificate of the adapter.";
+    }
+
+    /// <summary>
+    /// What a person reads when the server refused the adapter (<paramref name="status"/>), with the words of the server
+    /// if it gave any. A server is to refuse without its reason (OPC UA Part 4, 7.38.2), and then it most likely does
+    /// not trust the certificate of the adapter yet: the text says how to trust it. If the server says that it cannot
+    /// handle the security of the endpoint, trusting does not help, and the text says to choose another security.
+    /// </summary>
+    /// <param name="url">The address of the server.</param>
+    /// <param name="status">The symbolic name of the status.</param>
+    /// <param name="reason">What the server said, or null.</param>
+    /// <param name="security">The security of the endpoint, for example <c>SignAndEncrypt with Basic256Sha256</c>, or null.</param>
+    internal static string RefusedClient(string url, string status, string? reason = null, string? security = null)
+    {
+        var said = reason is null ? string.Empty : $" The server said: \"{reason}\".";
+        if (RefusalPolicy.IsUnsupportedSecurity(reason))
+        {
+            return $"The server at {url} refused the session with {status}: it offers {security ?? "the security of this endpoint"}, " +
+                $"but cannot handle it.{said} Trusting a certificate does not help. A person chooses another security on the " +
+                "endpoints card of opcua_endpoint_rank (\"Choose the security\"), for example the next one in the list; then try again.";
+        }
+
+        return $"The server at {url} refused the adapter with {status}: it most likely does not trust the certificate of " +
+            $"the adapter yet.{said} Trust it once on the server: the server keeps it among its rejected certificates as " +
+            $"\"{ApplicationName} [<thumbprint>].der\"; move it to its trusted certificates (for a UaGateway from " +
+            "pki/pkiserver/rejected to pki/pkiserver/trusted/certs), or accept it in the configuration of the server. " +
+            "Then try again; a running machine connects again by itself.";
     }
 
     /// <inheritdoc />

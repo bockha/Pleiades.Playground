@@ -1,4 +1,4 @@
-# MQTT binding (draft 0.2.0)
+# MQTT binding (draft 0.3.0)
 
 How machine data appears on the broker, and values about a place. This is a working draft for the playground.
 
@@ -19,6 +19,7 @@ machines/{MachineId}/umati/<path>        an element of the data model
 machines/{MachineId}/oem/<path>          a signal the machine manufacturer defines
 machines/{MachineId}/events/<group>      CloudEvents: jobs, workmasters, notifications
 sites/{SiteId}/{Source}/<path>           values about a place, in the names of one source
+hub/<topic>                              registration of apps at the Pleiades Hub, owned by its contract
 ```
 
 The first two levels of a topic say what a value is about, the third says whose names follow.
@@ -38,7 +39,18 @@ A value that belongs to no machine is about a place:
 - A source says that it is there: with `Connection/State` and `Connection/Heartbeat` below
   `sites/{SiteId}/{Source}/`.
 - A new source below `sites/` adds its rows to "Example topics of a source". A new first level beside
-  `machines` and `sites` is a change to this binding.
+  `machines`, `sites` and `hub` is a change to this binding.
+
+The first level `hub/` carries no values. It carries the registration of apps at the Pleiades Hub, the page
+that shows the apps of a Pleiades system under one header:
+
+- Its topics, `hub/discover`, `hub/clients/{ClientId}/announce` and `hub/clients/{ClientId}/offline`, and
+  their payloads are defined by the contract of the hub, `contracts/mqtt/README.md` in the repository
+  `umati/pleiades-hub`, not here. This binding only reserves the level and says who owns it; the decision
+  is [ADR-0021](../../docs/adr/0021-hub-registration.md).
+- What this document says about a value does not apply below `hub/`: the envelope, the units, the content
+  types and `Connection/State`. The messages there are not values. They are JSON, published with QoS 1 and
+  never retained.
 
 ### Value envelope of a place
 
@@ -100,7 +112,19 @@ and the stack reads only it; the earlier text of this section is in the history 
   `machines/+/events/notifications` with QoS 1 in a persistent session (Clean Start false, a fixed client id and a
   session expiry of one day), takes what has the content type `application/cloudevents+json`, and stores the
   CloudEvent as it came with the machine id of its topic. `source` and `id` together are unique, so an event the
-  broker delivers twice is stored once.
+  broker delivers twice is stored once. It acknowledges a message only once the Events API stored the event, had
+  stored it before, or refused it for good (no CloudEvent); while the Events API is away it waits and tries again,
+  and the messages behind it wait in the session of the broker, in their order.
+- The broker of the demo keeps its sessions across its own restart (`persistence true`, the volume `broker_data`)
+  and holds up to 50 000 messages for a session (`max_queued_messages`): at the rate of the demo, about 520 events
+  an hour, some four days in which the Events persistence may be away. Beyond that it drops what comes. A broker
+  in production sizes this for its own sources.
+- The Events API does not read the retained lists. For "after a gap or a new prefix it reads the state again" it
+  reads the prefix instead: an alert or a program execution that was open in an earlier run and that no later run
+  names again ends with the start of the next run (`AdapterRestart`); a job order is only marked `stale`, and so
+  is an open entry after a gap. Known limit: an adapter that keeps an alert standing across its restart without
+  naming it again loses it there; comparing with the retained `Notification/ActiveAlerts` would settle it. See
+  [the REST contracts](../openapi/README.md).
 
 ### Example topics of a source
 
@@ -126,7 +150,7 @@ lists, events, manifest and connection. It is the binding of `machines/`; why: s
 [ADR-0015](../../docs/adr/0015-the-binding-of-machines-follows-the-data-model.md).
 
 In the demo stack every simulator (P-04, P-07, M-02), the adapters of two real devices, an Ultimaker printer
-and a juice bar, the adapters of the three cutting machines and the OPC UA adapter publish this tree, and the services of the playground read only it (see "How the stack stores
+and a juice bar, the adapters of the three cutting machines, the bending adapter and the OPC UA adapter publish this tree, and the services of the playground read only it (see "How the stack stores
 it").
 
 ### Topics
@@ -221,6 +245,26 @@ The domain stays when the company is renamed; the display name of the manufactur
 proposal of this binding, not an element of the model: globally unique stays `ProductInstanceUri`, also as the
 `source` of every event.
 
+#### Without a ManufacturerUri
+
+Some OPC UA servers have no node for `Identification.ManufacturerUri`. For such a machine, and only then, the
+[OPC UA adapter](#what-the-adapters-of-real-devices-publish) takes `Identification.Manufacturer` instead: the name with `ä`, `ö`,
+`ü`, `ß` written out as above, other accents dropped and every character but `A-Z`, `a-z` and `0-9` removed,
+dots included, so that no part of it is taken for a top-level domain. This stand-in is published as
+`umati/Identification/ManufacturerUri`, the manufacturer part of the machine id and the prefix `x-<domain>` are
+formed from it by the rules above, and so is a `ProductInstanceUri` the server does not give
+(`{ManufacturerUri}/{Model}/{SerialNumber}`).
+
+| Manufacturer, Model, SerialNumber | `ManufacturerUri` | Machine id | Prefix |
+|---|---|---|---|
+| `TRUMPF Werkzeugmaschinen SE + Co. KG`, `TruLaser 5030`, `A0280O0001` | `TRUMPFWerkzeugmaschinenSECoKG` | `trumpfwerkzeugmaschinensecokg_TruLaser-5030_A0280O0001` | `x-trumpfwerkzeugmaschinensecokg` |
+
+A consumer should know what it then gets: `ManufacturerUri` is no web address, a formed `ProductInstanceUri`
+(`TRUMPFWerkzeugmaschinenSECoKG/TruLaser%205030/A0280O0001`) is a relative URI reference and no absolute URI,
+and the id changes with the name of the manufacturer, not with its domain. A server that has a node for
+`ManufacturerUri` and gives no value yet gets no stand-in: the machine waits for the value. A name without any
+letter or digit `A-Z`, `0-9`, such as one in Japanese, cannot stand in; such a machine is not added.
+
 A wildcard takes a whole level, so it selects every machine (`machines/+/umati/#`) or one
 (`machines/alcyone-machines_AX-400_P-04/#`); MQTT has no wildcard for a part of a level. Who wants the machines of
 one manufacturer or model filters on the id after `_`, or reads the manifests.
@@ -260,10 +304,10 @@ The rules for events, so that a consumer can keep nothing but the events and sti
 | Rule | What | Why |
 |---|---|---|
 | Topic per group | An event is published on `machines/{MachineId}/events/<topic>`, one topic per group of events, the group being the first segment of its path. The binding names the topic of each group, in lower case (table below): every event of a job order and its result on `events/jobs`, every event of a program execution on `events/workmasters`, every alert event on `events/notifications`. A group without a name in the table is not published. The topic names the subject of the events, not the profile: the profiles are called …Monitoring, but the events of a job order may come from a job management (ordering) one day too. The attribute `type`, the full path of the model such as `JobMonitoring.JobOrderStarted`, tells the events of a topic apart. | MQTT keeps the order of messages only within one topic. On one topic `JobOrderStarted` and the `JobOrderResultChanged` that follows arrive in the order they came up; between two groups, such as a job order and its program execution, only `time` orders them. One subscription per group is enough; `machines/+/events/+` gets them all. |
-| CloudEvent | `specversion` `1.0`; `id` a UUID, the same when the event goes out again; `source` the `ProductInstanceUri` of the machine, as a valid URI reference; `type` the path of the event; `time` its source time; `sequence` the start of the adapter (`yyyyMMddTHHmmssZ`), a dot and a count of twelve digits that counts the events of the machine within their group (`JobMonitoring`, `WorkMasterMonitoring`, `Notification`), from 1 and without a gap: one count per topic of events; `correlationid` the `ExecutionId` on the events of a program execution, and on an alert or notification that came up in one; `dataschema` the event schema of the model version; `data` the flat struct of the event. A new start of the adapter begins a new prefix and counts from 1 again. | A consumer finds a duplicate by `source` and `id`, and a gap by the count in `sequence`, in any technology; a comparison of strings orders the events of a group. After a gap or a new prefix it reads the state again: `JobMonitoring.JobOrders` and `JobMonitoring.JobOrderResults` after a gap in `JobMonitoring`, `WorkMasterMonitoring.ProgramExecution` after a gap in `WorkMasterMonitoring`, `Notification.ActiveAlerts` after a gap in `Notification`. |
+| CloudEvent | `specversion` `1.0`; `id` a UUID, the same when the event goes out again; `source` the `ProductInstanceUri` of the machine, as a valid URI reference; `type` the path of the event; `time` its source time; `sequence` the start of the adapter (`yyyyMMddTHHmmssZ`), a dot and a count of twelve digits that counts the events of the machine within their group (`JobMonitoring`, `WorkMasterMonitoring`, `Notification`), from 1 and without a gap: one count per topic of events; `correlationid` the `ExecutionId` on the events of a program execution, and on an alert or notification that came up in one; `dataschema` the event schema of the model version; `data` the flat struct of the event. A new start of the adapter begins a new prefix and counts from 1 again. | A consumer finds a duplicate by `source` and `id`, and a gap by the count in `sequence`, in any technology (events lost at the end of a run show no gap: the next run counts from 1 again); a comparison of strings orders the events of a group. After a gap or a new prefix it reads the state again: `JobMonitoring.JobOrders` and `JobMonitoring.JobOrderResults` after a gap in `JobMonitoring`, `WorkMasterMonitoring.ProgramExecution` after a gap in `WorkMasterMonitoring`, `Notification.ActiveAlerts` after a gap in `Notification`. |
 | Delivery | QoS 1, not retained. | QoS 1 delivers at least once; a duplicate is caught by `id`. A retained event would be a state, and a state is a value. |
 | Outbox | While the broker is away the adapter keeps the events in the order they came up and sends them after the next connect, with their source time and their `id`. The outbox is bounded; when it is full the oldest event is dropped and logged, and its count stays a gap in `sequence`: nothing is numbered again. Values need no outbox, every connect publishes them whole. | Without an outbox the events of a broker outage are lost unnoticed. |
-| Consumer | A consumer that keeps events subscribes with a persistent session: Clean Start false, a session expiry of for example 24 hours, QoS 1. Several instances of one consumer share the events with a shared subscription, `$share/<group>/machines/+/events/+`. | The broker holds the events while the consumer restarts. |
+| Consumer | A consumer that keeps events subscribes with a persistent session: Clean Start false, a session expiry of for example 24 hours, QoS 1, and acknowledges an event only once it is kept. Several instances of one consumer share the events with a shared subscription, `$share/<group>/machines/+/events/+`. | The broker holds the events while the consumer restarts or cannot keep them, as long as its queue for the session lasts. |
 
 | Group of events (first segment of `type`) | Topic below `machines/{MachineId}/events/` |
 |---|---|
@@ -467,7 +511,9 @@ Each virtual machine works like this:
   `"available": false`; without `ActiveAlerts` there are no alert or notification events either. By default
   nothing is unavailable.
 - The counters (power-on duration, operation duration, energy, parts) only grow; they are kept in `/data` across
-  restarts.
+  restarts, and so is the number of the next job order: a new run goes on from it and gives no job order id of a
+  run before it again. With `Scenario:Seed` the start of the run goes into the random numbers too, so a restart
+  gives other ids of program executions and alerts.
 - Its signal of the manufacturer, the temperature of the spindle bearing, warms towards a running temperature
   while the spindle turns (scaled by the spindle override) and cools back while it stands
   (`Scenario:BearingTemperatureIdle`, `BearingTemperatureRunning`, `BearingTimeConstant`).
@@ -534,6 +580,7 @@ machine does.
 | Ultimaker telemetry | `machines/ultimaker_UM3_UM3-01/` | `https://ultimaker.com` | `x-ultimaker-com`, on `oem/Ultimaker/…` | `Core` |
 | Juice bar | `machines/trumpf_JuiceBar_JUICEBAR-01/` | `https://www.trumpf.com` | `x-trumpf-com`, on `oem/JuiceBar/…` | `Core` |
 | Cutting adapter | `machines/trumpf_Laser2D_L-01/`, `trumpf_Tube_T-01/`, `trumpf_Punch_PU-01/` | `https://www.trumpf.com` | `x-trumpf-com`, on `oem/WorkMasterMonitoring/ActiveProgram` | `Core` |
+| Bending adapter | `machines/trumpf_5085_AE325085TB46/` | `https://www.trumpf.com` | `x-trumpf-com`, on `oem/WorkMasterMonitoring/ActiveProgram`, `oem/Rci/…`, `oem/Production/…` | `Core` |
 
 Each delivers of `Core` the identification, the connection and `State/Status`, with `MachineryOperationMode`
 `None`, the value of the model for a machine without operation modes; `ProductCode`, `YearOfConstruction`
@@ -545,21 +592,32 @@ and each alarm of the machine is an entry of `ActiveAlerts` with the events `Not
 the current alarms, so after a start of the adapter `ActiveAlerts` is `null` until the machine runs, stands
 without a fault or names an alarm; the list goes out before the events that change it.
 
+The [bending adapter](../../source/Pleiades.Playground.Bend.Adapter/README.md), one per press brake that reports through RCI
+telegram files, delivers `ActiveAlerts` with the same two events for a fault of the machine, and an operator message
+or a finished order as `Notification.NotificationEvent`; its timestamps are those of the machine as well, and the RCI
+operating state offline is `CommunicationFault`. RCI has no handshake and no request for the current state: the
+adapter reports `Running` as soon as it reads the exchange folder, while `State/Status` and `ActiveAlerts` stay
+`null` until the machine reports its first operating state; the list goes out before the events that change it.
+
 The [OPC UA adapter](../../source/Pleiades.Playground.OpcUa.Adapter/README.md) brings in every machine a person
 adds in the chat, with the same publisher and one MQTT connection per machine, so that each has its own last
 will (client id `opcua-adapter-<machineId>`). What it publishes follows from the registration of the machine:
 
 - The machine id is formed from `Identification.ManufacturerUri`, `Model` and `SerialNumber` as the server gave
-  them when the machine was added, and kept with the registration.
+  them when the machine was added, and kept with the registration. A server without a node for
+  `ManufacturerUri` gets `Identification.Manufacturer` without its special characters in its place, published
+  as `ManufacturerUri` (see [Without a ManufacturerUri](#without-a-manufactureruri)).
 - The manifest declares the core whole, what the machine lacks `"available": false`, and the other profiles
   whose elements the registration maps whole. A value of the maker is a signal of the manufacturer, below
-  `oem/`, with the prefix of the domain of its `ManufacturerUri`.
+  `oem/`, with the prefix of the domain of its `ManufacturerUri`, or of the stand-in.
 - A value goes out when the server reports a change, with the time of the source (`"timestampSource":
   "source"`), in the unit of the catalogue. `State.Status` is built from the two fields of the state.
 - `Connection/State` is `Running` while the OPC UA session stands and `CommunicationFault` while it does not.
 - The alarms of the server are `Notification.ActiveAlerts` and the events `Notification.AlertRaised` and
-  `Notification.AlertCleared` on `events/notifications`; `Severity` is the category of NE 107 from the severity of
-  OPC UA (from 667 `Failure`, from 334 `OffSpec`, below `MaintenanceRequired`), an assumption of the adapter.
+  `Notification.AlertCleared` on `events/notifications`. A machine in `urn:umati2:datamodel:opcua` gives them as
+  its list `Notification.ActiveAlerts`, with the category of NE 107 in `Severity`, which the adapter keeps. From an
+  alarm event `Severity` is the category from the severity of OPC UA (from 667 `Failure`, from 334 `OffSpec`,
+  below `MaintenanceRequired`), an assumption of the adapter.
   `sequence` counts from 1 in every run of the adapter; the outbox holds the events while the broker is away, as
   the managed client keeps every message. An alarm that stood before a restart of the adapter and still stands is
   raised once more in the new run, with its `Id` and its `Time`, so that every run names the alarms that stand.

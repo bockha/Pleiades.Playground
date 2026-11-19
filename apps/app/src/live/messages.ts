@@ -14,7 +14,7 @@ export type Value = {
 }
 
 /** An instant as the backend writes it, to the millisecond in UTC, so two instants compare as text. */
-function instantOf(written: unknown): string | null {
+export function instantOf(written: unknown): string | null {
   if (typeof written !== "string") return null
   const time = Date.parse(written)
   return Number.isNaN(time) ? null : new Date(time).toISOString()
@@ -179,4 +179,13 @@ export function matches(filter: string, topic: string): boolean {
     if (wanted[index] !== "+" && wanted[index] !== levels[index]) return false
   }
   return wanted.length === levels.length
+}
+
+/**
+ * The filters the broker can be asked for. An empty one is left out: MQTT allows no topic filter
+ * without a character, and Mosquitto drops a client that asks for one (Malformed Packet), with every
+ * other filter of its connection, and again on each reconnect.
+ */
+export function askable(filters: ReadonlyArray<string>): Array<string> {
+  return filters.filter((filter) => filter !== "")
 }

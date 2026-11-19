@@ -205,6 +205,11 @@ public sealed class JuiceBarTests
         var drinks = await GetAsync<Drink[]>(http, "/drinks");
         Assert.AreEqual("Tropical Mix", drinks.Single().Title);
         Assert.AreEqual("language=en", drinks[0].Description);
+        // What the author chose in the marketplace, and each ingredient with its colour and its bottle.
+        Assert.AreEqual("#ff9900", drinks[0].Color);
+        Assert.AreEqual("_22", drinks[0].Picture);
+        Assert.AreEqual(new DrinkComponent(FakeMixerControl.Orange, "Orange Juice", "#ff9900", false), drinks[0].Components[0]);
+        Assert.AreEqual(new DrinkComponent("unknown", "Mystery", null, true), drinks[0].Components[1]);
         Assert.AreEqual(HttpStatusCode.NotFound, (await http.GetAsync(new Uri("/drinks/nope", UriKind.Relative), TestContext.CancellationToken)).StatusCode);
 
         var status = await GetAsync<JuiceBarStatus>(http, "/status");
@@ -238,6 +243,54 @@ public sealed class JuiceBarTests
         Assert.IsFalse(machine.Requests.Any(r => !r.StartsWith("GET ", StringComparison.Ordinal) && !r.StartsWith("WS ", StringComparison.Ordinal)));
         Assert.IsTrue(machine.Requests.Where(r => r.StartsWith("WS ", StringComparison.Ordinal))
             .All(r => r is "WS 2" or "WS 40/production" or "WS 40/orders" || r.Contains("""["room",""", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public async Task TheUseOfTheIngredientsComesFromTheReportOfTheMarketplaceOverRestAndMcpAlike()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var machine = await FakeMixerControl.StartAsync(ct);
+        await using (var nameless = new JuiceBarFactory(machine.BaseUrl))
+        {
+            // Without a marketplace the use is not known, and the service says why instead of counting nothing.
+            using var http = nameless.CreateClient();
+            Assert.AreEqual(HttpStatusCode.Conflict, (await http.GetAsync(new Uri("/consumption", UriKind.Relative), ct)).StatusCode);
+        }
+
+        await using var factory = new JuiceBarFactory(machine.BaseUrl, ("JuiceBar:MarketplaceUrl", machine.BaseUrl.ToString()));
+        using var client = factory.CreateClient();
+        await ConnectedAsync(client);
+
+        var components = machine.Requests.Count(r => r == "GET /api/components");
+        var used = await GetAsync<Consumption>(client, "/consumption?hours=3");
+        // The pumps and the colours come from one read of the list of components.
+        Assert.AreEqual(components + 1, machine.Requests.Count(r => r == "GET /api/components"));
+        Assert.AreEqual(3, used.Hours);
+        Assert.AreEqual(TimeSpan.FromHours(3), used.To - used.From);
+        var orange = used.Ingredients[0];
+        Assert.AreEqual(FakeMixerControl.Orange, orange.ComponentId);
+        Assert.AreEqual("Orange Juice", orange.Name);
+        Assert.AreEqual("#ff9900", orange.Color);
+        Assert.AreEqual(1, orange.Pumps.Single());
+        Assert.AreEqual(17, orange.DrinksSinceStart);
+        Assert.AreEqual(2, orange.DrinksInHours);
+        // The ingredient of pump 2 has no name, so the report cannot say its use, and so the least used is not known.
+        Assert.AreEqual("unknown", used.Ingredients[1].ComponentId);
+        Assert.IsNull(used.Ingredients[1].DrinksSinceStart);
+        Assert.IsNull(used.LeastUsedId);
+        Assert.Contains("not known", used.Summary, StringComparison.Ordinal);
+        Assert.Contains("marketplace", used.Source, StringComparison.Ordinal);
+        Assert.AreEqual(HttpStatusCode.BadRequest, (await client.GetAsync(new Uri("/consumption?hours=25", UriKind.Relative), ct)).StatusCode);
+
+        await using var connection = await McpTestClient.ConnectAsync(client, cancellationToken: ct);
+        var result = await connection.Client.CallToolAsync("juicebar_consumption_get", new Dictionary<string, object?> { ["hours"] = 3 },
+            cancellationToken: ct);
+        Assert.IsFalse(result.IsError ?? false);
+        Assert.Contains("Orange Juice", string.Join("", result.Content.OfType<TextContentBlock>().Select(c => c.Text)), StringComparison.Ordinal);
+
+        // Reading never writes, neither at the machine nor at the marketplace.
+        Assert.IsTrue(machine.Requests.Contains("GET /api/reports/components/top"));
+        Assert.IsFalse(machine.Requests.Any(r => !r.StartsWith("GET ", StringComparison.Ordinal) && !r.StartsWith("WS ", StringComparison.Ordinal)));
     }
 
     [TestMethod]

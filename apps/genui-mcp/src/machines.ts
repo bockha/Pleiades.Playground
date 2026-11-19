@@ -50,15 +50,56 @@ export function machineOf(topic: string): string | undefined {
   return machineId.safeParse(level).success ? level : undefined
 }
 
+/** The words of a machine id or of a name: `AX-400 P-04` and `alcyone-machines_AX-400_P-04` share `ax-400` and `p-04`. */
+const wordsOf = (name: string) => name.toLowerCase().split(/[\s_]+/).filter((word) => word !== "")
+
+/** Whether `part` stands in `whole` as it is, word after word. */
+function standsIn(whole: ReadonlyArray<string>, part: ReadonlyArray<string>): boolean {
+  return whole.some((_, start) => part.every((word, offset) => whole[start + offset] === word))
+}
+
+/**
+ * The machine that a caller names, among the machines `known`. A machine is named by its id, or by
+ * what people call it: words of its id in their order, such as its serial number (`P-04`), or its
+ * model and serial number (`AX-400 P-04`); case and the gap between the words do not matter. An id
+ * of a known machine is that machine, even where it is also a word of another id. A name that fits
+ * several machines is refused with their ids. A name that fits none is given back as it is, so the
+ * caller refuses it in its own words, with the machines it knows.
+ *
+ * So a question about one machine takes one call: nobody has to list the machines first to find
+ * its id.
+ */
+export function machineNamed(known: ReadonlyArray<string>, name: string): string {
+  if (known.includes(name)) return name
+  const words = wordsOf(name)
+  if (words.length === 0) return name
+  const fitting = known.filter((machine) => standsIn(wordsOf(machine), words))
+  if (fitting.length > 1) {
+    throw new Error(`"${name}" fits more than one machine: ${fitting.join(", ")}. Name one of them by its id.`)
+  }
+  return fitting[0] ?? name
+}
+
+/** The ids of the machines that published a value in the last 24 hours. */
+export async function knownMachines(apis: Apis, now = new Date()): Promise<Array<string>> {
+  const topics = await listTopics(apis, secondsBefore(now, HORIZON_SECONDS), now)
+  return [...new Set(topics.flatMap((topic) => machineOf(topic) ?? []))].sort()
+}
+
 /** The identification of a machine: the newest value of each, however old. */
 async function readIdentity(apis: Apis, machine: string, now: Date): Promise<Identity> {
-  const [manufacturer, model, serialNumber] = await Promise.all(
+  const [manufacturer, model, serialNumber, deviceClass] = await Promise.all(
     Object.values(IDENTITY_PATHS).map(async (path) => {
       const [series] = await readStrings(apis, `machines/${machine}/${path}`, EVER, now, 1)
       return series?.samples.at(-1)?.value ?? null
     }),
   )
-  return { manufacturer: manufacturer ?? null, model: model ?? null, serialNumber: serialNumber ?? null }
+  return {
+    manufacturer: manufacturer ?? null,
+    model: model ?? null,
+    serialNumber: serialNumber ?? null,
+    deviceClass: deviceClass ?? null,
+  }
 }
 
 /**
@@ -101,7 +142,12 @@ function newest(instants: ReadonlyArray<string | null>): string | null {
   )
 }
 
-export async function listMachines(apis: Apis, now = new Date()): Promise<MachineList> {
+/**
+ * What every machine does now; with `only`, what that one machine does, read without the others: a
+ * page that shows each machine asks for each, and reading the whole fleet for each would grow with
+ * the square of the machines.
+ */
+export async function listMachines(apis: Apis, now = new Date(), only?: string): Promise<MachineList> {
   const windowStart = secondsBefore(now, WINDOW_SECONDS)
   // The values just before the window say what held and whether the machine was there where it begins.
   const readFrom = secondsBefore(windowStart, SILENT_AFTER_SECONDS)
@@ -109,15 +155,17 @@ export async function listMachines(apis: Apis, now = new Date()): Promise<Machin
 
   const [topics, open, jobOrders, ...series] = await Promise.all([
     listTopics(apis, horizon, now),
-    readOpenNotifications(apis, horizon, now),
-    readRunningJobOrders(apis),
-    ...names.map((name) => readValues(name)(apis, `machines/*/${paths[name]}`, readFrom, now)),
+    readOpenNotifications(apis, horizon, now, only),
+    readRunningJobOrders(apis, only),
+    ...names.map((name) => readValues(name)(apis, `machines/${only ?? "*"}/${paths[name]}`, readFrom, now)),
   ])
   const inWindow = Object.fromEntries(names.map((name, index) => [name, series[index] ?? []])) as Record<
     ReadingName,
     Array<Series>
   >
-  const machineIds = [...new Set(topics.flatMap((topic) => machineOf(topic) ?? []))].sort()
+  const machineIds = [...new Set(topics.flatMap((topic) => machineOf(topic) ?? []))]
+    .filter((id) => only === undefined || id === only)
+    .sort()
 
   const machines = await Promise.all(
     machineIds.map(async (id): Promise<Machine> => {
@@ -185,9 +233,11 @@ export async function listMachines(apis: Apis, now = new Date()): Promise<Machin
  * The signs of life of every machine between two instants: when it published its connection, its
  * heartbeat, its state, its operation mode or its program. Other values are signs of life too; a
  * caller that reads them adds them.
+ *
+ * With `machine`, the signs of that machine only, so a page of one machine reads no others.
  */
-export async function readSignsOfLife(apis: Apis, from: Date, to: Date): Promise<Map<string, Array<string>>> {
-  const series = await Promise.all(names.map((name) => readValues(name)(apis, `machines/*/${paths[name]}`, from, to)))
+export async function readSignsOfLife(apis: Apis, from: Date, to: Date, machine = "*"): Promise<Map<string, Array<string>>> {
+  const series = await Promise.all(names.map((name) => readValues(name)(apis, `machines/${machine}/${paths[name]}`, from, to)))
   const signs = new Map<string, Array<string>>()
   names.forEach((name, index) => {
     for (const one of series[index] ?? []) {
@@ -227,19 +277,23 @@ async function readSpans(apis: Apis, machine: string, from: Date, to: Date): Pro
 
 /**
  * One machine: what it does now, as in the list, and how long each state lasted in the hours
- * before. The states themselves are not in this result: they grow with time (`listSpans`).
+ * before. The states themselves are not in this result: they grow with time (`listSpans`). The
+ * machine is named by its id or as people call it (`machineNamed`).
  */
 export async function showMachine(
   apis: Apis,
-  machine: string,
+  name: string,
   hours = HISTORY_HOURS,
   now = new Date(),
 ): Promise<MachineShow> {
+  const machine = machineNamed(await knownMachines(apis, now), name)
   const from = secondsBefore(now, hours * 60 * 60)
-  const [list, spans] = await Promise.all([listMachines(apis, now), readSpans(apis, machine, from, now)])
+  const [list, spans] = await Promise.all([listMachines(apis, now, machine), readSpans(apis, machine, from, now)])
   const found = list.machines.find((one) => one.machine === machine)
   if (!found) {
-    const known = list.machines.map((one) => one.machine).join(", ") || "none"
+    // The list was read for this machine only; the machines there are come from the topics.
+    const topics = await listTopics(apis, secondsBefore(now, HORIZON_SECONDS), now)
+    const known = [...new Set(topics.flatMap((topic) => machineOf(topic) ?? []))].sort().join(", ") || "none"
     throw new Error(`No machine "${machine}" published a value in the last 24 hours. Machines that did: ${known}.`)
   }
   return {

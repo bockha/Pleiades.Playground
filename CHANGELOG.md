@@ -11,15 +11,183 @@ All notable changes are documented here. The format follows
   example app) as an app of the Smart Factory Host, one AppDefinition 1.2.1 in [`sfh/`](sfh/README.md), with
   scripts that build and push its images and run it on this computer as one pod. The app is served by the
   reverse proxy of the SFH, the broker's WebSocket included; it shows the machines that publish to its broker.
+- Juice bar API and example app: the use of the ingredients. `juicebar_consumption_get` and `GET /consumption`
+  say in how many sold drinks each ingredient on a pump was, in the last hours (8 if not asked) and since the
+  start, the most used first, and name the least used one, the one to take off a pump first. The counts come
+  from the public report of the marketplace the machine takes its recipes from, `JUICEBAR_MARKETPLACE_URL`, over
+  all its machines: drinks, not millilitres. The chat draws them as the card of the juices used, after the
+  energy card, and a page keeps it as a part.
+- Example app: the chat adds machines and makes sites and halls. Asked for it, the language model proposes with
+  `app_placement_propose`, and the chat draws a card that asks step by step for what is missing (which machine,
+  where) and writes only when a person confirms, with the server functions and the undo of Home
+  ([ADR-0026](docs/adr/0026-the-chat-proposes-where-a-machine-stands.md)).
+- Generative UI backend and cards: the job order card. `genui_job_order_show` shows the job order of one
+  machine (`JobMonitoring.JobOrders` with its result) and its program execution
+  (`WorkMasterMonitoring.ProgramExecution`) by the names of the umati data model, from the Events API; the
+  card draws both over the last hours as a timeline, which it asks `genui_job_order_timeline` for. The chat
+  draws it, and other hosts get it as `ui://genui/joborder`.
+- OPC UA adapter: a person chooses the security of the sessions to a server under "Choose the security" on
+  the endpoints card of the chat, a weaker endpoint or `None` included. Before `None` is taken the card shows
+  a destructive warning; the endpoint taken, the proposal and the list of servers warn too. The adapter keeps
+  the choice per server (`PUT`, `GET` and `DELETE /security`) and takes it for the scan and for every
+  registration proposed after; the model never chooses. Every session of the scan is anonymous first: the
+  stored user logs in only where the endpoint takes no anonymous session, or the server refuses it.
+- Example app: "Where is My Job?" stands the machines by their step of manufacturing, in clusters in the order
+  of DIN 8580 (printing, cutting, turning, milling, grinding, forming, joining). The step comes from
+  `Identification.DeviceClass`, else from words of the model; the panel "Arrange" corrects it, kept in the
+  browser. A tile has an icon for its step and the logo or name of its manufacturer. The perspectives stand
+  below the map in one column, the list of orders shows those in circulation by default. The machine card of
+  the generative UI backend has `identity.deviceClass` (optional).
+- Documentation answer and conflict cards with verbatim warnings, independently linked safety pages, package-wide source review and PDF quote highlighting.
+- Example app: a machine added over OPC UA in the chat goes on a site too, so Home shows it: on the only
+  site there is, or on the one a person chooses on the proposal where there are several. A toast says it,
+  "A1121O0001 added · North plant", as Home does for a machine it puts on a site. Where there is no site, or
+  the Sites API does not answer, the machine is added on no site, and the proposal and the toast say why.
+- Example app: the chips of an OPC UA proposal in the chat are pressed to see what they count. "2 missing"
+  lists the two missing elements with their values and why, "Core: 1 not available" what the core lacks,
+  and a profile marked incomplete what it lacks; pressed again, the list closes. The proposal shows no table
+  until a chip is pressed. On the mapping of `/mapping`, the chips of the numbers filter its table the same
+  way. The list of servers of `/opcua` has the numbers but not the elements, so its chips stay as they are.
+- Bending machine, started with the stack: a simulator of a press brake that reports through RCI telegram files, with a
+  web page, and one adapter per machine that publishes it after the binding of machines (data model 0.17.1) as
+  `trumpf_5085_AE325085TB46`: identification, `State/Status`, `Notification/ActiveAlerts` with `AlertRaised` and
+  `AlertCleared`, operator messages as `Notification.NotificationEvent`, and program, order and parts as signals of
+  the manufacturer below `oem/`. The automatic processing reports running and idle around each position and ends it
+  with `ProcessingStopped`, after which the adapter shows no program.
+- Margo app: the example app registers at the Pleiades Hub, as in `compose.yaml`, with the section
+  *Pleiades Hub* of the settings. *Register at the Pleiades Hub* (`HUB_REGISTRATION`, on by default) switches
+  the registration off, since a Margo client may leave an empty broker out and the default would come back;
+  the server of the app takes `HUB_REGISTRATION=false` everywhere. *Broker of the hub* is the broker of the
+  stack by default, and *Address of the example app for the hub* is Traefik under *Host name of the app*,
+  over HTTP, so the hub links to the address a browser on the network uses once Traefik is opened to it.
+- Example app: the showcase page `/trulaser`, a cockpit of a TRUMPF laser cutting machine named as the umati
+  data model names it: `State.Status` with `Notification.ActiveAlerts` and its history on one time axis, the
+  `JobOrder` with its `ProgramExecution`, and from the TRUMPF extension (`oem/Dalle/`) the requests of the
+  automation devices, the laser technology, the collision data and the condition guide. Each card says whether
+  it shows the model or the extension. Only a build with `APP_SHOWCASES` has it; it reads the Timeseries API
+  and the Events API from the server of the app, which gets `TIMESERIES_API_URL` and `EVENTS_API_URL` for
+  it, and nothing outside `apps/app/src/showcases/trulaser/` and its route changed.
+- Sites API, generative UI backend and example app: a machine has a position in its hall, and the page
+  `/halls` draws every hall as a plan seen from above. `PUT /placements/{machineId}/position` takes the middle
+  of the machine, `x` and `y` in metre from the upper left corner of the plan, and `DELETE` takes it away; the
+  position stays while the machine stays in its hall. `GET /placements`, `sites_placement_list` and
+  `genui_site_list` return it as `position`, null while nobody said. On the plan a machine stands at its
+  position with its state, live; one without waits in rows, with a dashed edge. A hall has no size of its own:
+  its plan is as large as its machines need. A person drags a machine on the plan to where it stands, or moves
+  it with the arrow keys, and the app keeps the position, to half a metre.
+- Example app: the showcase page `/titan`, an assistant you talk to, from the umati hackathon. Hold the space
+  bar or say "Hey Titan", ask, and Titan answers aloud from the values of the stack and shows the
+  conversation to scroll through, each answer with the card its tool gave. It has a conversation of its own, made for speaking: the hall as it is now stands in
+  its instructions, so most questions need no tool call, and it says at once that it heard and announces a
+  lookup. A Haiku model is asked not to think first, and a turn the model ends without a word is shown
+  as a problem. A new fault it says by itself, but never over the person or an answer, and at most one a minute.
+  Listening, the conversation and the voice come from the gateway at `LLM_BASE_URL` alone; a speech
+  model named `titan/...` there gives Titan a voice of its own. Its button "Tools" switches a further MCP
+  server of `APP_MCP_SERVERS` on for it, of which Titan takes the tools that only read: asked what the juice
+  bar can mix, it shows the drink card. Only a build with `APP_SHOWCASES` has it, and
+  nothing outside `apps/app/src/showcases/titan/` and its routes changed. Its guide,
+  `apps/app/src/showcases/titan/README.md`, says what leaves the room.
+- Example app: the list under the chat field that `/` opens offers the tools of the MCP servers the chat
+  has, after its commands, and works from the keyboard, as in other chats. `/genui_machine_show M-02` asks
+  the model to answer with that tool; it is a request, not a call, so the model still fills in the
+  arguments. A server the chat has switched off under "Tools" gives none, and neither does a tool only a
+  card calls. A part of a name finds the tool too (`/machine`). One entry is marked; the arrow keys move
+  the mark, Tab writes it into the field, Enter takes it and Escape closes the list. The field keeps the
+  focus and points to the marked entry for screen readers.
+- MQTT binding, draft 0.3.0: a third first level, `hub/`, beside `machines` and `sites`. It carries the
+  registration of apps at the Pleiades Hub (repository `umati/pleiades-hub`), the page that shows the apps of
+  a Pleiades system under one header. The binding only reserves the level and says who owns it: the topics
+  below it and their payloads are defined by the contract of the hub. Its messages are not values, so
+  envelope, units and content types do not apply to them. Nothing changes below `machines` and `sites`.
+- The example app registers at the Pleiades Hub. For the server of the app it is opt-in: with
+  `HUB_MQTT_URL` set to the broker, it registers one app when it starts, "Playground", with a description in
+  English and German and an icon of its own, and `HUB_APP_URL` names the address under which a browser
+  reaches the app. Without `HUB_MQTT_URL` nothing connects and the app behaves as before. The demo stack
+  sets both variables: its app registers at the broker of the stack, with the address
+  `http://localhost:5600/`, which follows `APP_PORT`. An empty `HUB_MQTT_URL` in `.env` switches the
+  registration off, and `HUB_APP_URL` there names another address; both stand in `.env.example`. The hub
+  itself is not part of the stack. The SDK of the hub, `@pleiades/hub-sdk`, is not on npmjs.org: it is
+  checked in as a tarball under `vendor/`, and the catalog refers to it with `file:`. ADR-0021 records the
+  decision and the deviation from "npmjs.org is the only registry". The settings are in
+  `apps/app/README.md`. The tarball is version 0.1.2, licensed under Apache-2.0, which brings the guide
+  `register-an-app.md`, and the skill `register-hub-app`, a copy from the hub's repository, leads an agent to it.
+- Example app: machines are added to a site and taken off it on Home, as in the mock. A bar names the machines
+  that sent data in the last 24 hours and stand on no site, with "Review and add"; "Add machine" also takes one by
+  its id. The menu of a row moves a machine or removes it, and "Undo" in the toast takes a change back.
+  `genui_site_list` counts how many machines on the sites send and how many need someone.
+- Sites API: a write of a site may name a condition. `If-None-Match: *` makes it only where there is none,
+  `If-Match` with the `etag` of the site changes or removes only the site that was read; 412 otherwise.
+- Example app: the drink card of the juice bar. For the result of `juicebar_drinks_list` the chat draws the
+  drinks whose bottles do not warn, each in the glass its author chose in the marketplace, filled with its
+  colour; a person picks one, and its button orders it at once, without a question of the language model.
+  The card follows the order and shows the glass waiting for the start button of the machine, filling while
+  the pumps run, and full, with an umbrella. Without motion the glass shows the same, still.
+- Juice bar API: a drink carries its colour and the picture of a glass its author chose (`color`, `picture`),
+  an ingredient its colour and whether its bottle runs low (`color`, `runsLow`). Colours that are not `#rrggbb`
+  are left out.
+- Example app: "Add a card" at the end of a kept page in "Edit" adds a card by hand, with no language model:
+  the cards a page can hold, by what they show, and what the chosen one takes, read from its input schema
+  (a machine by its name, the hours of its history). The same card twice or a thirteenth is not added.
+- Example app: "Edit" in the head of a kept page moves its parts up and down and removes one, by hand and with
+  no language model; "Undo" in the toast puts a removed part back, and the only part of a page stays.
+- OPC UA adapter: a server without a node for `Identification.ManufacturerUri` is added if it gives
+  `Identification.Manufacturer`: that name without any character but `A-Z`, `a-z` and `0-9` stands in for the
+  `ManufacturerUri` and forms the machine id (`TRUMPF SE + Co. KG` gives `trumpfsecokg_<model>_<serial number>`).
+  A mapped `ManufacturerUri` without a value yet is still waited for. The MQTT contract describes the rule
+  ([Without a ManufacturerUri](contracts/mqtt/README.md#without-a-manufactureruri)). The proposal in the chat says
+  so under "Good to know" (`notices`, with the `machineId`), and the registration keeps it as
+  `identity.manufacturerUriFromManufacturer`. A `Manufacturer` without any letter or digit `A-Z`, `0-9` is refused
+  with that reason.
+- Example app: asked for a page, a dashboard or an overview, the chat proposes one with the tool of the app
+  `app_page_propose`: a title and the parts, each a card with its arguments, which the app checks and the chat
+  shows with "Save to my pages" and "Preview". The model composes the recipe and keeps nothing (ADR-0020).
+- Example app: the page "OSACA cell" (`/osaca`) shows the OSACA demo cell, a robot that feeds a milling machine,
+  as a live 3D model with its key figures, axes, job orders, NC channels, alerts and machine data, from the
+  values the cell publishes over MQTT (`<root>/oem/…` and `<root>/umati/…`), and starts its preconfigured job
+  again after a confirmation. The settings `OSACA_MQTT_URL` and `OSACA_SIM_URL` name the broker and the
+  simulation.
+- Example app: "Edit" in the head of a kept page moves its parts up and down and removes one, by hand and with
+  no language model; "Undo" in the toast puts a removed part back, and the only part of a page stays.
+- Page of a machine: under the title where the machine stands, and below the machine card three sections as the
+  mock has them: Now, live tiles of its power, energy, spindle and feed; Alarms & warnings; Power and energy over
+  the chosen hours. Other hours read the sections again without loading the page again; a section that gets no
+  answer says so and asks again on its own, one question at a time. The page draws the cards without their feet
+  and topic lines, the chat with them. It reads the measurements of its machine only, and the alarms once after a
+  burst of alerts.
+- Notification card: `genui_notification_list` lists the warnings and errors of one machine over the last hours,
+  each with when it was raised, when it was cleared and how long it stood, or that it has not gone, and the chat
+  draws them with the notification card.
+- Example app: showcases. What is made for one demo or one fair lives in a folder of its own,
+  `apps/app/src/showcases/<name>/`, with its pages under `src/routes/(showcases)/`, and is built in only
+  where `APP_SHOWCASES` is set. The image `pleiades.playground.app` is the app alone, with nothing of a
+  showcase in it; the new image `pleiades.playground.app.showcases` is the same app built with all of
+  them, and `APP_SHOWCASES` in `.env` makes the stack take it. A showcase only adds: a test fails when a
+  file of the app reads from one or links to one of its pages. `AGENTS.md` and the skills `create-page`,
+  `create-card` and `build-your-own` ask whether a thing is base or a showcase
+  ([ADR-0018](docs/adr/0018-a-showcase-is-built-in-on-request-and-only-adds.md)).
+- Documentation sources: original PDF viewer with paging, zoom and native/OCR page search, retrieved
+  through bounded MCP binary resources without adding PDFs to model context.
+- Example app: optional documentation MCP tools with clickable, revision-specific manual page sources in chat,
+  showing printed page labels alongside differing physical pages. Margo exposes the additional MCP server setting.
 - Margo app: Traefik serves the example app over HTTPS as well (setting *HTTPS port of Traefik*, 443), with the
   self-signed certificate it generates itself, and forwards `/mqtt` of that port to the broker's WebSocket, so
   that live values work over HTTPS. HTTP stays as it is.
 - Example app: the setting `MQTT_WSS_PATH` sends a page over HTTPS to the broker at that path of the page's
   origin, for a proxy in front of the app that forwards it to the broker.
-- Example app: the page `/where-is-my-job`, "Where is My Job?", a basis for discussion with made-up data. It
-  shows the shop floor from above, one machine with what it did, does and will do, and one part on its way
-  from programming to packing, as three perspectives of one picture. It reads nothing from the stack and has no
-  entry in the sidebar.
+- SimpleCAM adapter (`simplecam-adapter-9042`): reads the state of the SimpleCAM machine 9042 from the SSE stream
+  of the SimpleCAM backend and publishes it to the broker as `machines/united-grinding_simplecam_9042/umati/...`
+  after the data model 0.17.1, with the job as the active work master and its progress as a signal of the
+  manufacturer, and a change of its list of alerts as events on `events/notifications`. It is optional: it
+  starts with the Compose profile `simplecam`, and the setting `SIMPLECAM_SSE_URL` names the stream. It is not
+  part of the Margo app.
+- Example app: the page `/where-is-my-job`, "Where is My Job?", a basis for discussion of how an order is
+  followed across the shop floor. It shows the machines of the stack from above, one machine with its job
+  orders done, running and waiting, and one order on its way: every job order that names the same order
+  number. The values are those of the stack; programming, packing and the single part on its sheet have no
+  source yet and stand on the page as such. The page reads the job orders from the new tool
+  `genui_job_order_list` of `genui-mcp`, the job orders on the lists of the machines from the Events API, so
+  they stand also after a reload or a reconnect; a job order the planner took back before it ran is left out.
+  It is a showcase, only in a build with `APP_SHOWCASES`, and has its entry in the sidebar there (see Changed).
 - Sites API (`sites-api`, port 5540): sites with their halls and the machines placed on them, kept in MongoDB.
   REST reads and writes (writing needs `sites:write`), MCP only reads (`sites_site_list`, `sites_placement_list`).
   A placement names its machine by the machine id of the MQTT binding (`machineId`, `/placements/{machineId}`),
@@ -28,6 +196,8 @@ All notable changes are documented here. The format follows
   the machines that send values and stand on no site. It reads the Sites API at `SITES_API_URL`.
 - Site card: a machine on no site carries what it does now (`now`), as a placed one does, so a page can keep it
   live.
+- Example app: the page Sites (`/sites`) shows where the machines stand, by site and hall. The page of a
+  machine moved under it to `/sites/<machine id>`; `/machines/<machine id>` leads there.
 - Example app: the setting `APP_MCP_SERVERS` gives the chat the tools of further MCP servers, such as the
   optional Ultimaker service, as `name=address` separated by commas.
 - Example app: the button "Tools" in the message field of the chat lists the servers that give the chat
@@ -41,6 +211,8 @@ All notable changes are documented here. The format follows
   room for actions on the right.
 - Energy card: `genui_energy_show` says how much energy machines imported over the last 1 to 24 hours, from
   their meters, with mean and peak power; the card draws their power as a graph (`genui_energy_series`).
+- Time series card: `genui_timeseries_show` draws any signal of any machine over 15 minutes to 24 hours, a line for each
+  pair of a machine and a signal, on two y axes at most; a person changes the range and the lines on the card.
 - Live values: the page `/live` of the example app draws a graph for each physical value over the last 15
   minutes, a line for each machine, and shows one machine or all of them. `genui-mcp` has the tools
   `genui_measurement_list`, the newest value of each quantity for every machine with the measurement card,
@@ -285,8 +457,76 @@ All notable changes are documented here. The format follows
   attribute of all candidates in one call and uses it to choose between them, to tell what a node of the maker
   means, and as the unit of a node without `EngineeringUnits`. A description that contradicts the element, or
   disagrees with the `EngineeringUnits`, makes the match `Unclear`.
+- The brand TRUMPF (`packages/ui/brands/trumpf`): the colours, square corners and Open Sans of the TRUMPF
+  UX UI Community design system. Its `DESIGN.md` names what the design system asks for that a brand
+  cannot do.
 
 ### Changed
+
+- Home: "Add new machine" adds a machine that is not there yet, said by its manufacturer, model and serial
+  number, its id formed by ADR-0015; an id that sends already is assigned instead, one on a site moved.
+  "Review and add" assigns the machines that sent data in the last 24 hours from a list, searched by name,
+  manufacturer, state, id and last data, seven a page, several at once to one site and hall. Sites and halls
+  are made while typing, "Add site" and "Add hall" make them alone, and both dialogs start at the place used
+  last.
+- Home and the machine card in the chat: the whole row of a machine leads to its page; its buttons stay clicks
+  of their own, and the keyboard meets one link a row.
+- Example app: "Where is My Job?" is a showcase, only in a build with `APP_SHOWCASES`: at `/where-is-my-job`
+  and in the sidebar, it opens with made-up orders WI-… across the clusters, and "Real orders" turns them off.
+  The page "What if" at `/what-if` is gone, and so is the page of the app without the made-up orders: the
+  application alone has no "Where is My Job?".
+- Documentation answers use cards exclusively; retired the previous prose/source-list presentation.
+- Example app: a part of a page asks the server that has its tool, not only `genui-mcp`: the OPC UA adapter for
+  `opcua_*`, an entry of `APP_MCP_SERVERS` for its tools. The drink card of the juice bar, the added OPC UA
+  servers and the mapping of one can be kept as a page, pinned and shared; opened, they show the values of then.
+  A part whose server the app does not have says which setting lacks it, and the rest of the page is whole. A
+  page calls only a tool its server marks as reading; the cards of an OPC UA scan stay in the chat. The chat
+  proposes only parts whose server the stack has, and "Add a card" offers the cards of every server. ADR-0025
+  amends ADR-0014 and ADR-0020.
+- Machine page: while it opens, every part shows a grey placeholder of its form and size, so nothing moves when
+  the values come. The tiles of now stand without a card around them, and the machine card leaves out the line
+  that only repeats what the control reports. A machine on a site that sent nothing for 24 hours shows
+  "No data in the last 24 hours" instead of an error.
+- Machine page: while it opens, nothing of it is written yet. The titles, the labels of the tiles and the head of
+  the alarm table are grey placeholders too, and a reader of the screen hears "Loading" until the data comes.
+- Notification card: the alerts stand as a table, in the chat too: level, message with its code, raised,
+  cleared and duration; where the card is narrow, the last two stand under the message. The sums at the foot
+  are left out; the note on alerts not listed stands under the table, and the foot names when the card was
+  read and its topic, as the other cards do.
+- Example app: the microphone of the chat field can be held. Hold it while you speak and let go, as on a
+  tablet, and what was said goes into the field; a tap starts and ends the recording as before. The recording
+  starts as the finger goes down, so the first word is heard. While it records, the second line of the field
+  shows bars that move with the voice, the time and what ends it, where the finger does not cover it. The
+  recorder is the app's own now, so that the bars read the stream that records.
+- Example app: what dictation heard so far stands in the chat field while one speaks, dimmed, and grows
+  about every two seconds; when the recording ends, all of it is written down once more and goes into the
+  field. The recording so far is written down again and again, one request at a time, as the gateway has no
+  model that writes while one speaks. A draft still on its way at the end is called off at the gateway too.
+  Drafts stop after 30 s of recording, and the app writes one draft at a time for all its fields, so drafts
+  never take more than one of the two requests a key has at the gateway.
+- Example app: Live values with all machines shows only the graphs of a value some machine published, and
+  next to the title of a graph at most one value of now, where a single machine measures it; more stand
+  only as lines. Where machines are there and none published such a value, the page says so. With one machine
+  chosen, it shows every signal that machine published in the last 24 hours, a number or a yes or no, found
+  anew each time the machine is chosen (`genui_timeseries_signals`), each in a graph of its own over the last
+  15 minutes with its newest value, live from the broker. A machine without any value keeps the graphs as
+  before. Every graph has a button at its top right that shows it enlarged over the page, still live; the X
+  at the top right of the enlarged graph closes it.
+- Example app: "New chat" is back in the head of the chat panel, as a plus in the list and in every chat. It
+  opens a new chat with no question yet and the cursor in its field; the list stays behind "All chats". After
+  the first question asked in the panel, the field of the new chat keeps the cursor, so the next question
+  follows without a click. In the URL the list is `?chat=all` now, and `?chat=new` is the new chat.
+- Notification card: all notifications or those of one level, errors or warnings, ten a page, those that stand
+  first, with the pagination of the energy card; the counts at the head follow the level.
+- Time series and energy card: power in kilowatts with an area under its line, a taller graph, and times on full
+  hours and quarter hours; the energy table has columns for the meter, kWh, Avg kW and Peak kW. The machine card
+  writes the times under its band. This holds in the chat as well, which draws the same cards.
+- Generative UI backend: `genui_measurement_series` takes an optional `machine`, as `genui_measurement_list` does,
+  and then reads the values and signs of life of that machine only.
+- Example app: Home (`/`) shows where the machines stand, by site and hall; "Needs you" keeps what it showed first.
+  The tiles of the running machines are gone. `/sites` leads to `/`.
+- Cutting simulators: their web pages (ports 5611 to 5613) answer on the network too, not only on this
+  computer, as the web UI of the OPC UA simulator does; in the stack and in the Margo app.
 
 - The Ultimaker telemetry and the juice bar publish the payloads and the delivery of the MQTT binding of
   machines, not only its tree, as the simulators do: every value retained with QoS 1 in the envelope
@@ -312,7 +552,10 @@ All notable changes are documented here. The format follows
   program executions and alerts with their NE 107 severity as CloudEvents, not retained, waiting in a bounded
   outbox while the broker is away; a stack light; `Connection/State` `Initializing`, `Running`,
   `CommunicationFault` and `Shutdown`. The events of the step that ends a `CommunicationFault` go out after
-  `Running`; only those of the steps meanwhile are lost. Each simulator of the stack has a scenario of its own
+  `Running`; only those of the steps meanwhile are lost. A restart goes on with the numbers of the job orders
+  (kept with the counters in `/data`) and, with a `Scenario:Seed`, gives other ids of program executions and
+  alerts, so no id of a run before comes again. A counter file of before, without that number, goes on above the
+  highest number its runs can have given: two job orders a step over the power-on time they added. Each simulator of the stack has a scenario of its own
   (`Config:SpecOutput:ScenarioName`: P-04 the default, P-07 `housings`, M-02 `small-parts`) and a made-up
   manufacturer on a domain below `.example`: Alcyone Machine Works (`alcyone-machines_AX-400_P-04`), Taygeta
   Precision (`taygeta-precision_TP-800_P-07`) and Merope Microtec (`merope-microtec_MM-120_M-02`). Its tests
@@ -326,13 +569,28 @@ All notable changes are documented here. The format follows
   such as `State/Status` field by field, and keeps no lists, no `null` and no manifest.
 - Events: the persistence takes `application/cloudevents+json` from `machines/+/events/jobs`, `…/workmasters`
   and `…/notifications` with QoS 1 in a persistent session (`Config:MqttSource:SessionExpiry`); an event stored
-  before (409, delivered again or retried) counts as stored and is logged on Debug. The Events
+  before (409, delivered again or retried) counts as stored and is logged on Debug. It acknowledges a message only
+  once its event is stored, stored before or refused for good (another 4xx); while the Events API is away it
+  waits and tries again every `Config:RetryDelay` (5 s), and a stop meanwhile leaves the message to the broker.
+  The broker of the demo keeps its sessions across a restart (volume `broker_data`) and queues up to 50 000
+  messages for a session. The Events
   API keeps the CloudEvents as they came in one collection `MachineEvent`, unique by `source` and `id`. It serves
   `/machineEvents` (by machine, group, type, correlation id, job order and time) with `/machineEvents/gaps`, `/alerts/active`, `/alerts/pairs` and `/alerts/statistics` (by
   NE 107 severity), `/jobOrders` with `/jobOrders/{mId}/{jobOrderId}`, and `/programExecutions`, and the MCP
   tools `events_machine_events_query`, `events_sequence_gaps_query`, `events_active_alerts_query`,
   `events_alert_pairs_query`, `events_alert_statistics_query`, `events_job_orders_query` and
   `events_program_executions_query`.
+  The active alerts are found by an aggregation in MongoDB over the alerts not cleared, and the gaps from the runs
+  of the adapter (per machine, group and prefix of `sequence`), so neither is limited. A gap before the first
+  stored event of a run is named only when the run started within the retention and the range. The other views
+  read at most the newest 100 000 events, without the CloudEvent as it came, and answer with the header
+  `Pleiades-Truncated: true` when that left older events out. A new start of the adapter (a new prefix of
+  `sequence`) closes an alert or a program execution of an earlier run that the new run does not name again:
+  `clearedBy` / `endType` `AdapterRestart` at the start of the new run, the duration of the alert at most, the
+  execution without sums. A job order is never closed so, only `stale`; so is an open entry with a gap after its
+  last event. Known limit: an adapter that keeps an alert standing across its restart without naming it again
+  loses it in the views; comparing with the retained `Notification/ActiveAlerts` would settle it and is not done
+  yet.
 - The machine card shows the work master instead of the program, the job order that runs, and alerts with their
   NE 107 severity; a machine whose adapter is not `Running` has no data, since the adapter said so.
 - The measurement card and the Ultimaker telemetry follow this tree: the card takes a machine by its machine id,
@@ -430,15 +688,74 @@ All notable changes are documented here. The format follows
   is the start view, now headed "Chats"; its field begins a new chat. "New chat" is gone from the head of a
   chat, since it led to the same view the way back leads to. Without a language model the head still says
   "Chat". After "All chats" or a chat of the list the focus is on the heading of the view it leads to.
+- OPC UA adapter: the endpoint card of `/discover` shows the endpoint the adapter takes in one line, and says
+  when the server also accepts sessions without security. The other endpoints are folded behind "n more
+  endpoints", since a person cannot choose one there.
 
 ### Removed
 
+- arm64: the workflow "Images" builds every image for `linux/amd64` only, and the Margo app asks for an amd64
+  device. Some images the stack takes, such as the OPC UA simulator of umati, are built for amd64 only.
 - `NotificationEventDtoV1`, its collection, the endpoints `/notificationEvents` and the MCP tools
   `events_notification_*`.
 - The libraries `Pleiades.Playground.Events.Generators` and `Pleiades.Playground.Timeseries.Generators`.
 
 ### Fixed
 
+- Generative UI backend: a question about the job orders of every machine shows the job order card in the
+  chat. The model answered it with `genui_job_order_list`, which draws no card, and told the person the values
+  were in a card; the result of the list now says so and names the machines whose job order runs, for
+  `genui_job_order_show`, at most ten: where more run, the answer is the list in words. The chat calls the list "Read the job orders", not by its name.
+- Home: on a narrow page the head of a site no longer lies over the chat below it.
+- PDF viewer now supports continuous scrolling and readable native-text highlights that stay aligned through zoom and resize.
+- Example app, showcase TruLaser: `/trulaser` without a machine shows the TruLaser alive most recently, not the first
+  by name. A machine that was renamed or stopped kept the page on its old values for a day.
+- Example app: `/discover` takes a mistyped or shortened address as the address it is. `opc.tcp//host:port`
+  became `opc.tcp://opc.tcp//host:port:4840`, a machine name with the default port; a mistyped `opc.tcp` at
+  the start, also `opc.tcp:host:port`, is now written right, and `host:port` or `host:port/path` without a
+  scheme gets `opc.tcp://` and no second port. Only
+  a name alone, for example `A1121O0001`, still means `opc.tcp://<name>:4840`.
+- `opcua-adapter`: a rejected certificate is reported with its reason instead of a timeout. A server whose
+  certificate does not carry the ApplicationUri it announces was told in the chat as "did not open a session
+  within 30 seconds"; the reason was only in the log. A connect now stops on the first certificate error and
+  says the status and why, for example `BadCertificateUriInvalid`, in the chat, the REST API and `lastError`.
+  A server that refuses the adapter with `BadSecurityChecksFailed` is told as a server that most likely does
+  not trust the certificate of the adapter yet, with where to trust it; the scan's `opcua_ua_connect` adds the
+  same hint to its error. (#179, #192)
+- SimpleCAM adapter: an alert goes out with a `Severity` of NAMUR NE 107 and the field names of the data model. The
+  backend had said `Warning`, which no consumer knows, and one such entry in the Events API left the machine page of
+  the example app without any machine ("No answer from the backend"). `Warning` and every other unknown word now
+  say `MaintenanceRequired`, `Error`, `Fault`, `Alarm` and `Critical` say `Failure`, and `Text`, `Source` and
+  `Timestamp` go out as `Message`, `SourceName` and `Time`, so that the alert has its text on the page.
+- Example app and generative UI backend: the demo stays quick with many machines. Live values draws its graphs
+  at most twice a second and only the graphs whose values changed, instead of all of them for every message of
+  the broker. `genui_machine_show` reads the one machine it shows instead of the whole fleet, so Charts, which asks
+  for every machine, no longer grows with the square of the machines. A kept page or one opened from a link stands
+  at once and draws each part when its answer comes. The server of the app keeps one connection to the backend.
+- OPC UA adapter: the alarms of a machine in `urn:umati2:datamodel:opcua` reach
+  `umati/Notification/ActiveAlerts` and `events/notifications`. The adapter reads the list
+  `Notification.ActiveAlerts` of that namespace, decodes `DataType.Alert` itself and raises and clears an alert
+  as it comes into the list and leaves it, with the severity the server gives (`alerts.list`, set by the rules of
+  the namespace). Before, the list went out once as `null`, and alarm events were dropped because their
+  conditions lie in the TRUMPF interface. A TRUMPF machine outside that namespace gets the events of
+  `TcMachineAlarmType` with `AlarmIdentifier` if its registration names no alarms and its server has that type,
+  and the TRUMPF interface counts as its own namespace. A server without the list or the type moves
+  `Notification.ActiveAlerts` to `missing`. A stored registration takes this on `/rescan` (issue 180).
+- `app`: a new question in the chat stays at the top of the panel and its answer grows under it, also when the
+  answer is a card taller than the panel. Until now the chat ran to the end of such an answer at once, so the
+  question and the head of the card were out of sight; with the machines of the stack today, the cards of power
+  and energy or of the measurements of all machines are that tall. A long text no longer pulls the panel along
+  either: it grows under its question too, and the button at the foot leads to its end as it stands. An alert
+  under an answer, such as "The language model did not answer", comes into view by itself.
+- `genui-mcp`: a tool about one machine takes the machine as people call it, its serial number (`P-04`) or its
+  model and serial number (`AX-400 P-04`), as well as its id. A language model had to call `genui_machine_list`
+  first to learn the id, and the chat drew that list, every machine, above nearly every answer. A name that fits
+  several machines is refused with their ids; an id always means its own machine.
+- `app`: the chat draws the list of all machines only where the answer calls no other tool after it. A model
+  that reads the list to find a machine, and then asks about that machine, leaves it a step, "Read the
+  machines", which opens to the list; "Save as page" does not keep it either. While the answer
+  is coming, the list waits until it is clear which of the two it is.
+- `genui-mcp`: the card files load the `data-*` variants of shadcn, as the example app does, so a part of `packages/ui` that is styled by one, such as a separator, is drawn in them too.
 - `app`: the live pages and the chat work on a page opened over plain HTTP at the address of another computer,
   as a demo in a local network is. A browser gives `crypto.randomUUID` only to a secure context, so such a page
   never reached the broker ("not live, no connection to the broker"), and a question asked outside the chat did

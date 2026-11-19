@@ -9,7 +9,7 @@ namespace Pleiades.Playground.JuiceBar.Api;
 internal sealed class JuiceBarTools(JuiceBarService juiceBar)
 {
     [McpServerTool(Name = "juicebar_drinks_list", ReadOnly = true, Idempotent = true, Destructive = false),
-     Description("List the drinks the juice bar can mix now, each with its id, title, description and ingredients. Only drinks whose ingredients are installed are listed.")]
+     Description("List the drinks the juice bar can mix now, each with its id, title, description, colour, the picture of a glass its author chose, and its ingredients, each with its colour and whether its bottle runs low. Only drinks whose ingredients are installed are listed.")]
     public Task<IReadOnlyList<Drink>> Drinks(CancellationToken cancellationToken)
         => Guard(() => juiceBar.DrinksAsync(cancellationToken));
 
@@ -23,6 +23,13 @@ internal sealed class JuiceBarTools(JuiceBarService juiceBar)
      Description("Read the state of the juice bar: whether it is connected, the production state, progress as a fraction 0-1, the waiting orders, and each pump with its ingredient, bottle volume in cubic metre and whether it warns that the bottle runs low. There is no measured fill level.")]
     public Task<JuiceBarStatus> Status(CancellationToken cancellationToken)
         => Guard(() => juiceBar.StatusAsync(cancellationToken));
+
+    [McpServerTool(Name = "juicebar_consumption_get", ReadOnly = true, Idempotent = true, Destructive = false),
+     Description("How often each ingredient on a pump went into a sold drink, in the last hours and since the start, the most used first, and which one is used least; each with its pumps, its colour and whether its bottle runs low. The counts come from the public report of the marketplace over all its machines: drinks, not millilitres. The summary says the answer in words.")]
+    public Task<Consumption> Consumption(
+        [Description("How many hours back the recent count looks, 1 to 24. 8 if omitted.")] int hours = ConsumptionReport.DefaultHours,
+        CancellationToken cancellationToken = default)
+        => Guard(() => juiceBar.ConsumptionAsync(hours, cancellationToken));
 
     [McpServerTool(Name = "juicebar_order_get", ReadOnly = true, Idempotent = true, Destructive = false),
      Description("Get one order by its number: its drink, its state, progress as a fraction 0-1 and its place in the queue.")]

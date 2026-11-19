@@ -83,9 +83,9 @@ process.on("exit", startAgain)
 process.once("SIGINT", () => process.exit(130))
 process.once("SIGTERM", () => process.exit(143))
 
-/** Opens a page with the chat panel at its start. Answers why the chat cannot be shown, if it cannot. */
+/** Opens a page with the chat panel at its list. Answers why the chat cannot be shown, if it cannot. */
 async function openChat(page, url) {
-  await page.goto(`${url}?chat=new`)
+  await page.goto(`${url}?chat=all`)
   const field = page.getByRole("textbox", { name: "Message" })
   const none = page.getByText("No language model configured")
   await field.or(none).first().waitFor()
@@ -111,9 +111,11 @@ const pictures = [
   {
     name: "machine-page",
     async show(page, at) {
-      await page.goto(`${at.app}/machines/${SHOWN}`)
+      await page.goto(`${at.app}/sites/${SHOWN}`)
       await page.getByRole("heading", { name: SHOWN_TITLE }).waitFor()
       await page.getByText(/^Last (hour|\d+ hours)$/).waitFor()
+      // The sections below the card come after it: the tiles of now are the first of them.
+      await page.getByText("Bearing temperature").first().waitFor()
     },
   },
   {
@@ -131,7 +133,7 @@ const pictures = [
   {
     name: "chat-answer",
     async show(page, at) {
-      const reason = await openChat(page, `${at.app}/machines/${SHOWN}`)
+      const reason = await openChat(page, `${at.app}/sites/${SHOWN}`)
       if (reason) return reason
       console.log(`  asking the language model: ${QUESTION}`)
       const field = page.getByRole("textbox", { name: "Message" })

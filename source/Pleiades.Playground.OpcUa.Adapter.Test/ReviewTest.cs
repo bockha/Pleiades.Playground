@@ -16,7 +16,7 @@ using Pleiades.Playground.OpcUa.Adapter.Registrations;
 
 namespace Pleiades.Playground.OpcUa.Adapter.Test;
 
-/// <summary>The filter of the scan's connect tool, as the MCP server runs it, with a stored user.</summary>
+/// <summary>The filter of the scan's connect tool, as the MCP server runs it: the security of the adapter, anonymous first.</summary>
 [TestClass]
 public class ScanConnectFilterTest
 {
@@ -31,21 +31,165 @@ public class ScanConnectFilterTest
         Arguments = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)!,
     };
 
-    private static Func<string, CancellationToken, Task<IReadOnlyList<OfferedEndpoint>>> Presents(string? thumbprint) =>
-        (_, _) => Task.FromResult<IReadOnlyList<OfferedEndpoint>>(
-            [new OfferedEndpoint(Url, SecurityMode.SignAndEncrypt, "Aes256_Sha256_RsaPss", false, thumbprint, UserName: true)]);
-
     private static readonly Credential Stored = new("operator", "s3cret-pass", Pinned);
 
+    /// <summary>A server of one encrypted endpoint that takes a user name only, presenting <paramref name="thumbprint"/>.</summary>
+    private static Func<string, CancellationToken, Task<EndpointOffer>> UserOnly(string? thumbprint, string? user = "operator") =>
+        (url, _) => Task.FromResult(new EndpointOffer(
+            url,
+            [new OfferedEndpoint(Url, SecurityMode.SignAndEncrypt, "Aes256_Sha256_RsaPss", false, thumbprint, UserName: true)],
+            user));
+
+    /// <summary>A server that takes anonymous sessions and a user name on its encrypted endpoint, and anonymous ones without security.</summary>
+    private static Func<string, CancellationToken, Task<EndpointOffer>> Both(string? user = null, SecurityChoice? choice = null) =>
+        (url, _) => Task.FromResult(new EndpointOffer(
+            url,
+            [
+                new OfferedEndpoint(Url, SecurityMode.SignAndEncrypt, "Aes256_Sha256_RsaPss", true, Pinned, UserName: true),
+                new OfferedEndpoint(Url, SecurityMode.None, "None", true, Pinned),
+            ],
+            user,
+            choice));
+
+    private static Func<string, OfferedEndpoint, CancellationToken, Task<bool>> Refuses(bool refuses, List<string>? tried = null) =>
+        (_, endpoint, _) =>
+        {
+            tried?.Add($"{endpoint.SecurityMode}/{endpoint.SecurityPolicy}");
+            return Task.FromResult(refuses);
+        };
+
+    private static Func<CallToolRequestParams, CancellationToken, ValueTask<CallToolResult>> Passing(Action<CallToolRequestParams> seen) =>
+        (call, _) =>
+        {
+            seen(call);
+            return ValueTask.FromResult(new CallToolResult());
+        };
+
     [TestMethod]
-    public async Task A_stored_user_goes_into_the_call_and_its_password_out_of_the_result()
+    public async Task A_scan_the_server_refuses_for_an_untrusted_adapter_says_how_to_trust_it()
+    {
+        var result = await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            _ => null,
+            Both(),
+            Refuses(false),
+            (_, _) => ValueTask.FromResult(new CallToolResult
+            {
+                IsError = true,
+                Content = [new TextContentBlock { Text = "Connect failed: [80130000] (BadSecurityChecksFailed)" }],
+            }),
+            TestContext.CancellationToken);
+
+        Assert.IsTrue(result.IsError);
+        var texts = result.Content.OfType<TextContentBlock>().Select(block => block.Text).ToList();
+        Assert.HasCount(2, texts, "The error of the library stays, the hint comes after it.");
+        Assert.Contains("does not trust the certificate of the adapter", texts[1]);
+        Assert.Contains(Url, texts[1]);
+        Assert.Contains(OpcUaClient.ApplicationName, texts[1]);
+    }
+
+    [TestMethod]
+    public async Task Another_error_of_a_scan_gets_no_trust_hint()
+    {
+        var result = await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            _ => null,
+            Both(),
+            Refuses(false),
+            (_, _) => ValueTask.FromResult(new CallToolResult
+            {
+                IsError = true,
+                Content = [new TextContentBlock { Text = "Connect failed: [80AE0000] (BadNotConnected)" }],
+            }),
+            TestContext.CancellationToken);
+
+        Assert.HasCount(1, result.Content);
+    }
+
+    [TestMethod]
+    public async Task A_scan_takes_the_strongest_endpoint_anonymously_whatever_security_the_model_named()
+    {
+        CallToolRequestParams? passed = null;
+
+        await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}","securityMode":"None","name":"scan"}"""),
+            _ => null,
+            Both(),
+            Refuses(false),
+            Passing(call => passed = call),
+            TestContext.CancellationToken);
+
+        Assert.AreEqual("SignAndEncrypt", passed!.Arguments!["securityMode"].GetString());
+        Assert.AreEqual("Aes256_Sha256_RsaPss", passed.Arguments["securityPolicy"].GetString(), "The library matches the short name of a policy, not its URI.");
+        Assert.AreEqual("Anonymous", passed.Arguments["authType"].GetString());
+        Assert.IsFalse(passed.Arguments.ContainsKey("password"));
+        Assert.AreEqual("scan", passed.Arguments["name"].GetString());
+    }
+
+    [TestMethod]
+    public async Task A_scan_takes_the_security_a_person_chose_even_none()
+    {
+        CallToolRequestParams? passed = null;
+
+        await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            _ => null,
+            Both(choice: new SecurityChoice(SecurityMode.None, "None")),
+            Refuses(false),
+            Passing(call => passed = call),
+            TestContext.CancellationToken);
+
+        Assert.AreEqual("None", passed!.Arguments!["securityMode"].GetString());
+        Assert.AreEqual("None", passed.Arguments["securityPolicy"].GetString(), "The library matches the short name of a policy, not its URI.");
+    }
+
+    [TestMethod]
+    public async Task A_stored_user_goes_before_an_anonymous_session_also_where_the_server_takes_both()
+    {
+        CallToolRequestParams? passed = null;
+        var tried = new List<string>();
+
+        await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            _ => Stored,
+            Both(user: "operator"),
+            Refuses(false, tried),
+            Passing(call => passed = call),
+            TestContext.CancellationToken);
+
+        Assert.IsEmpty(tried, "No anonymous session is tried: an anonymous session may see less than the user a person stored.");
+        Assert.AreEqual("operator", passed!.Arguments!["username"].GetString());
+        Assert.AreEqual("SignAndEncrypt", passed.Arguments["securityMode"].GetString());
+    }
+
+    [TestMethod]
+    public async Task Without_a_stored_user_a_scan_is_anonymous_and_tries_nothing_before()
+    {
+        CallToolRequestParams? passed = null;
+        var tried = new List<string>();
+
+        await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            _ => null,
+            Both(),
+            Refuses(false, tried),
+            Passing(call => passed = call),
+            TestContext.CancellationToken);
+
+        Assert.IsEmpty(tried);
+        Assert.AreEqual("Anonymous", passed!.Arguments!["authType"].GetString());
+    }
+
+    [TestMethod]
+    public async Task A_server_that_refuses_the_anonymous_session_gets_the_stored_user_and_the_password_stays_out_of_the_result()
     {
         CallToolRequestParams? passed = null;
 
         var result = await ScanConnect.CallAsync(
             Call($$"""{"endpointUrl":"{{Url}}"}"""),
-            url => url == Url ? Stored : null,
-            Presents(Pinned),
+            _ => Stored,
+            Both(user: "operator"),
+            Refuses(true),
             (call, _) =>
             {
                 passed = call;
@@ -53,12 +197,57 @@ public class ScanConnectFilterTest
             },
             TestContext.CancellationToken);
 
-        Assert.IsNotNull(passed);
-        Assert.AreEqual("s3cret-pass", passed.Arguments!["password"].GetString());
+        Assert.AreEqual("s3cret-pass", passed!.Arguments!["password"].GetString());
         Assert.AreEqual("SignAndEncrypt", passed.Arguments["securityMode"].GetString());
         var text = ((TextContentBlock)result.Content[0]).Text;
         Assert.DoesNotContain("s3cret-pass", text, "The model never reads the password, also not in an error.");
         Assert.Contains("***", text);
+    }
+
+    [TestMethod]
+    public async Task A_refused_anonymous_session_without_security_falls_back_to_the_user_on_an_encrypted_endpoint()
+    {
+        CallToolRequestParams? passed = null;
+
+        await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            _ => Stored,
+            Both(user: "operator", choice: new SecurityChoice(SecurityMode.None, "None")),
+            Refuses(true),
+            Passing(call => passed = call),
+            TestContext.CancellationToken);
+
+        Assert.AreEqual("SignAndEncrypt", passed!.Arguments!["securityMode"].GetString(), "A password never goes over an endpoint without encryption.");
+        Assert.AreEqual("Aes256_Sha256_RsaPss", passed.Arguments["securityPolicy"].GetString(), "The library matches the short name of a policy, not its URI.");
+    }
+
+    [TestMethod]
+    public async Task An_endpoint_without_anonymous_sessions_takes_the_user_at_once()
+    {
+        CallToolRequestParams? passed = null;
+        var tried = new List<string>();
+
+        await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""),
+            url => url == Url ? Stored : null,
+            UserOnly(Pinned),
+            Refuses(false, tried),
+            Passing(call => passed = call),
+            TestContext.CancellationToken);
+
+        Assert.IsEmpty(tried, "No anonymous session is tried where the endpoint takes none.");
+        Assert.AreEqual("operator", passed!.Arguments!["username"].GetString());
+    }
+
+    [TestMethod]
+    public async Task A_server_that_wants_a_user_without_a_stored_one_is_not_called()
+    {
+        var result = await ScanConnect.CallAsync(
+            Call($$"""{"endpointUrl":"{{Url}}"}"""), _ => null, UserOnly(Pinned, user: null), Refuses(false),
+            (_, _) => throw new AssertFailedException("The tool must not be called."), TestContext.CancellationToken);
+
+        Assert.IsTrue(result.IsError);
+        Assert.AreEqual(ScanConnect.NeedsUserText, ((TextContentBlock)result.Content[0]).Text);
     }
 
     [TestMethod]
@@ -69,7 +258,8 @@ public class ScanConnectFilterTest
         var result = await ScanConnect.CallAsync(
             Call($$"""{"endpointUrl":"{{Url}}"}"""),
             _ => Stored,
-            Presents("DDEEFF"),
+            UserOnly("DDEEFF"),
+            Refuses(false),
             (_, _) =>
             {
                 called = true;
@@ -83,23 +273,13 @@ public class ScanConnectFilterTest
     }
 
     [TestMethod]
-    public async Task A_call_that_brings_a_user_is_refused_and_one_without_a_stored_user_goes_on_as_it_is()
+    public async Task A_call_that_brings_a_user_is_refused()
     {
         var refused = await ScanConnect.CallAsync(
-            Call($$"""{"endpointUrl":"{{Url}}","username":"x","password":"y"}"""), _ => Stored, Presents(Pinned),
+            Call($$"""{"endpointUrl":"{{Url}}","username":"x","password":"y"}"""), _ => Stored, Both(), Refuses(false),
             (_, _) => throw new AssertFailedException("The tool must not be called."), TestContext.CancellationToken);
-        Assert.AreEqual(ScanConnect.Refusal, ((TextContentBlock)refused.Content[0]).Text);
 
-        CallToolRequestParams? passed = null;
-        await ScanConnect.CallAsync(
-            Call($$"""{"endpointUrl":"{{Url}}"}"""), _ => null, Presents(Pinned),
-            (call, _) =>
-            {
-                passed = call;
-                return ValueTask.FromResult(new CallToolResult());
-            },
-            TestContext.CancellationToken);
-        Assert.IsFalse(passed!.Arguments!.ContainsKey("password"), "An anonymous scan stays anonymous.");
+        Assert.AreEqual(ScanConnect.Refusal, ((TextContentBlock)refused.Content[0]).Text);
     }
 }
 
@@ -157,6 +337,130 @@ public class CertificatePinTest
         await Assert.ThrowsExactlyAsync<ServerCertificateChangedException>(
             () => client.ConnectAsync(Endpoint(pinned: "0000"), TestContext.CancellationToken));
         sessions.VerifyNoOtherCalls();
+    }
+
+    [TestMethod]
+    public async Task A_rejected_server_certificate_is_told_with_its_reason()
+    {
+        using var directory = new TemporaryDirectory();
+        var sessions = new Mock<IManagedSessionFactory>(MockBehavior.Strict);
+        sessions
+            .Setup(factory => factory.ConnectAsync(It.IsAny<ConfiguredEndpoint>(), It.IsAny<Action<ManagedSessionBuilder>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceResultException(
+                StatusCodes.BadCertificateUriInvalid,
+                new LocalizedText("The Application in the EndpointDescription (urn:UmatiSampleServer) is not in the Server Certificate.")));
+        var client = Client(new CredentialStore(directory.Path), sessions);
+
+        var rejected = await Assert.ThrowsExactlyAsync<ServerCertificateRejectedException>(
+            () => client.ConnectAsync(Endpoint(), TestContext.CancellationToken));
+
+        Assert.Contains("BadCertificateUriInvalid", rejected.Message);
+        Assert.Contains("urn:UmatiSampleServer", rejected.Message);
+        Assert.Contains(Url, rejected.Message);
+        Assert.IsTrue(Api.MachineEndpoints.IsServerFault(rejected), "The chat and the API tell it as a fault of the server.");
+    }
+
+    [TestMethod]
+    public async Task A_server_that_does_not_trust_the_adapter_is_told_with_how_to_trust_it()
+    {
+        using var directory = new TemporaryDirectory();
+        var sessions = new Mock<IManagedSessionFactory>(MockBehavior.Strict);
+        sessions
+            .Setup(factory => factory.ConnectAsync(It.IsAny<ConfiguredEndpoint>(), It.IsAny<Action<ManagedSessionBuilder>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceResultException(StatusCodes.BadSecurityChecksFailed, "Error received from remote host"));
+        var client = Client(new CredentialStore(directory.Path), sessions);
+
+        var rejected = await Assert.ThrowsExactlyAsync<ServerCertificateRejectedException>(
+            () => client.ConnectAsync(Endpoint(), TestContext.CancellationToken));
+
+        Assert.Contains(Url, rejected.Message);
+        Assert.Contains("BadSecurityChecksFailed", rejected.Message);
+        Assert.Contains("does not trust the certificate of the adapter", rejected.Message);
+        Assert.Contains(OpcUaClient.ApplicationName, rejected.Message, "The person finds the certificate by the name the server shows.");
+        Assert.Contains("trusted", rejected.Message);
+    }
+
+    [TestMethod]
+    public async Task A_session_without_a_user_ends_at_once_when_the_server_refuses_the_adapter()
+    {
+        using var directory = new TemporaryDirectory();
+        var configure = await ConfigurationOf(new CredentialStore(directory.Path), Endpoint());
+
+        var (refused, tries) = await ConnectToRefusingServer(configure, StatusCodes.BadSecurityChecksFailed);
+
+        Assert.AreEqual(StatusCodes.BadSecurityChecksFailed, refused.StatusCode);
+        Assert.HasCount(1, tries, "The stack does not try again: the reason reaches the person, not a timeout.");
+    }
+
+    [TestMethod]
+    public async Task A_session_with_a_user_ends_at_once_when_the_server_refuses_the_user()
+    {
+        using var directory = new TemporaryDirectory();
+        var credentials = new CredentialStore(directory.Path);
+        credentials.Save(Url, new Credential("operator", "s3cret-pass", Thumbprint));
+        var configure = await ConfigurationOf(credentials, Endpoint(user: "operator"));
+
+        var (refused, tries) = await ConnectToRefusingServer(configure, StatusCodes.BadUserAccessDenied);
+
+        Assert.AreEqual(StatusCodes.BadUserAccessDenied, refused.StatusCode);
+        Assert.HasCount(1, tries, "The stack does not try again: the reason reaches the person, not a timeout.");
+        Assert.AreEqual(UserTokenType.UserName, tries[0]?.TokenType, "The session logs in with the stored user.");
+    }
+
+    /// <summary>The configuration the client gives the session factory of the stack for a connect to <paramref name="endpoint"/>.</summary>
+    private async Task<Action<ManagedSessionBuilder>> ConfigurationOf(CredentialStore credentials, EndpointRegistration endpoint)
+    {
+        Action<ManagedSessionBuilder>? configure = null;
+        var sessions = new Mock<IManagedSessionFactory>(MockBehavior.Strict);
+        sessions
+            .Setup(factory => factory.ConnectAsync(It.IsAny<ConfiguredEndpoint>(), It.IsAny<Action<ManagedSessionBuilder>>(), It.IsAny<CancellationToken>()))
+            .Callback<ConfiguredEndpoint, Action<ManagedSessionBuilder>, CancellationToken>((_, action, _) => configure = action)
+            .ThrowsAsync(new ServiceResultException(StatusCodes.BadNotConnected));
+
+        await Assert.ThrowsExactlyAsync<ServiceResultException>(
+            () => Client(credentials, sessions).ConnectAsync(endpoint, TestContext.CancellationToken));
+
+        Assert.IsNotNull(configure, "The client opens the session through the factory.");
+        return configure;
+    }
+
+    /// <summary>
+    /// Connects a real managed session of the stack, configured by <paramref name="configure"/>, to a server that
+    /// refuses every session with <paramref name="status"/>. Without the reconnect policy of the adapter the stack
+    /// tries again until it is cancelled; the limit only keeps such a test from hanging.
+    /// </summary>
+    /// <returns>The refusal the connect ended with, and the user identity of each try.</returns>
+    private async Task<(ServiceResultException Refused, List<IUserIdentity?> Tries)> ConnectToRefusingServer(
+        Action<ManagedSessionBuilder> configure, StatusCode status)
+    {
+        var telemetry = DefaultTelemetry.Create(_ => { });
+        var tries = new List<IUserIdentity?>();
+        var server = new Mock<ISessionFactory>();
+        server.SetupGet(factory => factory.Telemetry).Returns(telemetry);
+        server
+            .Setup(factory => factory.WithSubscriptionEngine(It.IsAny<ISubscriptionEngineFactory>(), It.IsAny<TimeProvider>()))
+            .Returns(() => server.Object);
+        server
+            .Setup(factory => factory.CreateAsync(
+                It.IsAny<ApplicationConfiguration>(), It.IsAny<ConfiguredEndpoint>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<string>(), It.IsAny<uint>(), It.IsAny<IUserIdentity>(), It.IsAny<ArrayOf<string>>(), It.IsAny<CancellationToken>()))
+            .Callback((ApplicationConfiguration _, ConfiguredEndpoint _, bool _, bool _, string _, uint _, IUserIdentity? identity, ArrayOf<string> _, CancellationToken _) =>
+                tries.Add(identity))
+            .ThrowsAsync(new ServiceResultException(status));
+        var builder = new ManagedSessionBuilder(new ApplicationConfiguration(), telemetry)
+            .UseEndpoint(new ConfiguredEndpoint(null, new EndpointDescription { EndpointUrl = Url }, null))
+            .UseSessionFactory(server.Object);
+        configure(builder);
+
+        using var limited = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
+        limited.CancelAfter(TimeSpan.FromSeconds(10));
+        var refused = await Assert.ThrowsExactlyAsync<ServiceResultException>(
+            async () =>
+            {
+                await using var session = await builder.ConnectAsync(limited.Token);
+            },
+            "The connect ends with the refusal of the server, not when it is cancelled.");
+        return (refused, tries);
     }
 
     [TestMethod]
@@ -231,7 +535,7 @@ public class MachineSupervisorTest
         });
         var supervisor = new MachineSupervisor(
             new RegistrationStore(dataDirectory), new AlertStore(dataDirectory), client, new RegistrationProbe(client), outputs,
-            new DraftStore(), credentials, config, NullLogger<MachineSupervisor>.Instance);
+            new DraftStore(), credentials, new SecurityChoiceStore(dataDirectory), config, NullLogger<MachineSupervisor>.Instance);
         return (supervisor, outputs);
     }
 

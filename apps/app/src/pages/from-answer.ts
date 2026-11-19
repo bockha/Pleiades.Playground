@@ -1,6 +1,6 @@
 import type { UIMessage } from "@tanstack/ai-react"
 
-import { blocksOf, questionOf } from "../chat/blocks.ts"
+import { blocksOf, calledAfter, questionOf } from "../chat/blocks.ts"
 import type { ChatTool } from "../chat/tool-results.ts"
 import { drawingTool } from "./parts.ts"
 import { MAX_PARTS, recipeOf, recipePartSchema, titleOf } from "./recipe.ts"
@@ -41,6 +41,11 @@ function keyOf(value: unknown): string {
   )
 }
 
+/** A part as text, its tool and its arguments with their keys in order: two parts equal in meaning are equal as text. */
+export function keyOfPart(part: RecipePart): string {
+  return `${part.tool} ${keyOf(part.args)}`
+}
+
 /**
  * The tool calls of an answer for which the chat drew something, in their order: the tool is one the
  * chat draws, the call's result is there and is no error, and `draw` of the tool gave something for
@@ -56,6 +61,8 @@ export function callsOfAnswer(parts: Parts, tools: ReadonlyArray<ChatTool>): Arr
     const result = parts.find((other) => other.type === "tool-result" && other.toolCallId === part.id)
     if (result?.type !== "tool-result" || result.state === "error") continue
     const tool = drawingTool(part.name, tools)
+    // A lookup on the way to the answer, which the chat did not draw (chat/blocks.ts).
+    if (tool?.lookup && calledAfter(parts, parts.indexOf(result))) continue
     const drawn = tool?.draw?.(result.content)
     if (drawn === null || drawn === undefined) continue
     const args = argsOf(part)
@@ -64,7 +71,7 @@ export function callsOfAnswer(parts: Parts, tools: ReadonlyArray<ChatTool>): Arr
     // does not take the other parts with it.
     const kept = recipePartSchema.safeParse({ tool: part.name, args })
     if (!kept.success) continue
-    const key = `${kept.data.tool} ${keyOf(kept.data.args)}`
+    const key = keyOfPart(kept.data)
     if (seen.has(key)) continue
     seen.add(key)
     calls.push(kept.data)

@@ -28,6 +28,15 @@ Read [README.md](README.md), [CONTRIBUTING.md](CONTRIBUTING.md) and the decision
   It needs `pnpm install` first. In one thing this repository differs from the skill of the Router: the
   route tree, `routeTree.gen.ts`, is not committed here. It is written from the route files, see
   [`apps/app`: What is where](apps/app/README.md#what-is-where). Never commit it, and never edit it.
+- What is made for one demo, one fair or one story is a showcase; everything else is base. Base works for
+  any machine that follows the data model, reads only through the contracts, and needs no made-up data, no
+  named person and no special device. `contracts/`, `source/`, `apps/genui-mcp`, `packages/cards` and
+  `packages/ui` take base only. A showcase of the example app lives in `apps/app/src/showcases/<name>/`, its
+  pages under `apps/app/src/routes/(showcases)/`, and it is in a build only where `APP_SHOWCASES` is set: the
+  image `pleiades.playground.app` has nothing of a showcase in it. A showcase only adds: it changes no shared
+  file, nothing outside reads from its folder, and no other page links to one of its pages; a test fails if
+  one does. Before you build a page or a card, decide which of the two it is, and say so in the pull request
+  ([ADR-0018](docs/adr/0018-a-showcase-is-built-in-on-request-and-only-adds.md)).
 - A service reads and writes data only through a contract under `contracts/`. Change the contract first.
 - Units: a machine below `machines/` keeps the units of the data model (energy in `wattHour`); a place below
   `sites/` uses SI units, energy in joule, fractions in `one`. Never invent or convert units on the wire, in a
@@ -67,6 +76,10 @@ Read [README.md](README.md), [CONTRIBUTING.md](CONTRIBUTING.md) and the decision
   [`packages/ui/brands`](packages/ui/brands/README.md), a `DESIGN.md` and a block of theme tokens written
   from it. Follow the skill `add-brand` (`.claude/skills/add-brand/SKILL.md`). A brand never edits a
   component and never sets a colour that carries a meaning; a test fails if it does.
+- A change to how the example app registers at the Pleiades Hub, one more app there, or a new tarball of the
+  SDK under `vendor/` ([ADR-0021](docs/adr/0021-hub-registration.md)): follow the skill `register-hub-app`
+  (`.claude/skills/register-hub-app/SKILL.md`). It is a copy from the hub's repository and leads to the guide
+  that comes with the SDK, `apps/app/node_modules/@pleiades/hub-sdk/register-an-app.md`.
 - A person who wants to add a page, a card or a source of data of their own: follow the skill
   `build-your-own` (`.claude/skills/build-your-own/SKILL.md`). Ask what they want to see, look yourself what
   the stack already has, propose the smallest thing that shows it, and on a yes take the recipe of the step

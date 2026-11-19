@@ -13,7 +13,8 @@ export function inKilowattHours(value: number, unit: string | null): number | nu
   return per === undefined ? null : value / per
 }
 
-function number(value: number, decimals: number): string {
+/** A number in the decimals given, as the cards write numbers: 1,234.50. */
+export function number(value: number, decimals: number): string {
   return new Intl.NumberFormat("en-GB", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value)
 }
 
@@ -37,14 +38,6 @@ export function axisKilowatts(watt: number): string {
 /** "the last hour", "the last 8 hours". */
 export function lastHours(hours: number): string {
   return hours === 1 ? "the last hour" : `the last ${hours} hours`
-}
-
-/**
- * The pieces of a machine id between which a line may break where the card is narrow:
- * alcyone-machines_AX-400_P-04 breaks as alcyone-machines_|AX-400_|P-04.
- */
-export function machineIdPieces(id: string): Array<string> {
-  return id.split(/(?<=_)/)
 }
 
 /**

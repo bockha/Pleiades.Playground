@@ -30,6 +30,12 @@ The stack keeps its data: the project name is fixed, so its volumes stay from on
   | `.env` | The settings of [`.env.example`](../.env.example): ports, `APP_BIND`, the address and the key of the LiteLLM gateway. It is never part of a commit. |
   | `compose.override.yaml` | Optional. What only this computer needs, for example the network of a reverse proxy. |
 
+  The app of the stack registers at the Pleiades Hub by default, with the address
+  `http://localhost:<APP_PORT>/`. That address is right only for a browser on the same computer. On a
+  computer that others reach, set `HUB_APP_URL` in `.env` to the address their browsers use, or switch the
+  registration off with `HUB_MQTT_URL=`: see
+  [`apps/app`: In the demo stack](../apps/app/README.md#in-the-demo-stack).
+
 The live pages of the example app hear the broker from the browser, MQTT over WebSocket. On a demo that people
 open from other computers, the browser has to reach it:
 
@@ -148,3 +154,22 @@ The service listens on host loopback port 5550 by default. Before `JUICEBAR_BIND
 switch sign-in on with `JUICEBAR_AUTH_ENABLED=true` and the three `JUICEBAR_AUTH_*` values; the chat of the
 example app sends no token and does not reach the service then. See the
 [service guide](../source/Pleiades.Playground.JuiceBar.Api/README.md).
+
+## Show the showcases
+
+The example app has two images. `pleiades.playground.app` is the app alone. `pleiades.playground.app.showcases`
+is the same app built with its showcases, pages made for one demo or one fair, which may show made-up data
+([ADR-0018](adr/0018-a-showcase-is-built-in-on-request-and-only-adds.md)). The Images workflow publishes both
+with the same commit tags.
+
+A demo that shows them sets one value in the private `.env` of the deployment computer in DEPLOY_DIR:
+
+```dotenv
+APP_SHOWCASES=true
+```
+
+The stack then runs the second image. Any value switches them on, `false` too; to run the app alone, leave
+the value empty. It is read when the image is pulled, not while the app runs.
+
+The [Margo app](../margo/README.md) has no such setting: it always runs the app alone, since bart takes the
+name of an image as it stands. A device that is to show a showcase runs `compose.yaml` instead.

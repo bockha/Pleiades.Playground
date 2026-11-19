@@ -53,7 +53,7 @@ var applicationUri = builder.Configuration["Config:ApplicationUri"] ?? "urn:plei
 builder.Services.AddOpcUa()
     .AddClient(options =>
     {
-        options.ApplicationName = "Pleiades Playground OPC UA Adapter";
+        options.ApplicationName = OpcUaClient.ApplicationName;
         options.ApplicationUri = applicationUri;
         options.ProductUri = "urn:pleiades:playground:opcua:adapter";
         options.PkiRoot = Path.Combine(dataDirectory, "pki");
@@ -67,6 +67,8 @@ builder.Services.AddSingleton(new RegistrationStore(dataDirectory));
 builder.Services.AddSingleton(new AlertStore(dataDirectory));
 builder.Services.AddSingleton(services => new CredentialStore(
     dataDirectory, reason => services.GetRequiredService<ILogger<CredentialStore>>().CredentialsUnreadable(reason)));
+builder.Services.AddSingleton(services => new SecurityChoiceStore(
+    dataDirectory, reason => services.GetRequiredService<ILogger<SecurityChoiceStore>>().SecurityChoicesUnreadable(reason)));
 builder.Services.AddSingleton<DraftStore>();
 builder.Services.AddSingleton<OpcUaClient>();
 builder.Services.AddSingleton<IRegistrationProbe, RegistrationProbe>();

@@ -142,6 +142,11 @@ test("with a machine the list holds that one only, and an unknown one is refused
   )
   assert.equal(requested.some((url) => url.pathname.includes("/machines/P-04/")), false)
   await assert.rejects(listMeasurements(apis, now, "X-99"), /No machine "X-99" published a value in the last 24 hours. Machines that did: P-04, P-07./)
+  // As people call it, in small letters.
+  assert.deepEqual(
+    (await listMeasurements(apis, now, "p-07")).machines.map((one) => one.machine),
+    ["P-07"],
+  )
 })
 
 test("a line shows at the end of each slot the value that held, as it was measured, and none while the machine is silent", () => {
@@ -261,4 +266,34 @@ test("a topic below the path of a machine is not a line of that machine", async 
   const series = await listMeasurementSeries(apis, 15, 180, now)
   const override = series.quantities.find((one) => one.quantity === "spindleOverride")
   assert.deepEqual(override?.lines.map((line) => line.topic), ["machines/P-04/umati/Spindle/1/Override"])
+})
+test("the series of one machine read nothing of another", async () => {
+  const temperature = (machine: string) => `machines/${machine}/oem/Spindle/1/BearingTemperature`
+  const requested = serve({
+    ...heartbeat("P-04", 960, 0),
+    ...heartbeat("P-07", 960, 0),
+    [temperature("P-04")]: [{ at: ago(30), value: 46, unit: "degreeCelsius" }],
+    [temperature("P-07")]: [{ at: ago(15), value: 47.5, unit: "degreeCelsius" }],
+  })
+
+  const series = await listMeasurementSeries(apis, 15, 180, now, "P-04")
+  const lines = series.quantities.flatMap((one) => one.lines.map((line) => line.machine))
+  assert.deepEqual([...new Set(lines)], ["P-04"])
+  const topics = requested.filter((url) => url.pathname.startsWith("/timeseries/")).map((url) => decodeURIComponent(url.pathname))
+  assert.ok(topics.length > 0)
+  assert.equal(topics.every((path) => path.includes("/topics/machines/P-04/")), true)
+})
+
+test("the measurements of one machine read the signs of life of that machine only", async () => {
+  const requested = serve({
+    ...heartbeat("P-04", 960, 0),
+    ...heartbeat("P-07", 960, 0),
+    "machines/P-04/oem/Spindle/1/BearingTemperature": [{ at: ago(30), value: 46, unit: "degreeCelsius" }],
+  })
+
+  const list = await listMeasurements(apis, now, "P-04")
+  assert.deepEqual(list.machines.map((one) => one.machine), ["P-04"])
+  const values = requested.filter((url) => url.pathname.startsWith("/timeseries/")).map((url) => decodeURIComponent(url.pathname))
+  assert.equal(values.some((path) => path.includes("/machines/*/")), false)
+  assert.equal(values.some((path) => path.includes("/machines/P-07/")), false)
 })

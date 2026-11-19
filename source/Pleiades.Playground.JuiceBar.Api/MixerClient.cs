@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
 namespace Pleiades.Playground.JuiceBar.Api;
@@ -10,26 +12,110 @@ namespace Pleiades.Playground.JuiceBar.Api;
 /// The REST interface of MixerControl, as far as this service uses it. Of its routes that change something it
 /// calls exactly one: the one that places an order. It never starts the production and never touches a pump.
 /// </summary>
-internal sealed class MixerClient(IHttpClientFactory clients, IOptions<JuiceBarOptions> options)
+internal sealed partial class MixerClient(IHttpClientFactory clients, IOptions<JuiceBarOptions> options)
 {
     internal const string HttpClientName = "juicebar";
 
     internal async Task<IReadOnlyList<Drink>> DrinksAsync(CancellationToken cancellationToken)
     {
         using var document = await GetAsync("api/drinks", cancellationToken).ConfigureAwait(false);
-        return document is { RootElement.ValueKind: JsonValueKind.Array }
-            ? [.. document.RootElement.EnumerateArray().Select(ToDrink).OfType<Drink>()]
-            : throw new JuiceBarUnavailableException("The juice bar returned no list of drinks.");
+        if (document is not { RootElement.ValueKind: JsonValueKind.Array })
+        {
+            throw new JuiceBarUnavailableException("The juice bar returned no list of drinks.");
+        }
+
+        // A drink names its ingredients without their colours; the list of components has them.
+        var colors = await ColorsAsync(cancellationToken).ConfigureAwait(false);
+        Drink[] drinks = [.. document.RootElement.EnumerateArray().Select(d => ToDrink(d, colors)).OfType<Drink>()];
+        var pictures = await Task.WhenAll(drinks.Select(d => PictureAsync(d.Id, cancellationToken))).ConfigureAwait(false);
+        return [.. drinks.Select((drink, index) => drink with { Picture = pictures[index] })];
     }
 
-    internal async Task<Drink?> DrinkAsync(string id, CancellationToken cancellationToken)
+    /// <summary>
+    /// The picture of a glass the author of a drink chose, named by the id of the first group of its SVG, or null.
+    /// The picture of a recipe does not change, so it is fetched once. A drink without one is still on the card.
+    /// </summary>
+    private async Task<string?> PictureAsync(string drinkId, CancellationToken cancellationToken)
     {
-        // The machine answers an unknown id with an error of its marketplace, so the card decides what exists.
-        var drinks = await DrinksAsync(cancellationToken).ConfigureAwait(false);
-        return drinks.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (_pictures.TryGetValue(drinkId, out var known))
+        {
+            return known;
+        }
+
+        using var client = clients.CreateClient(HttpClientName);
+        try
+        {
+            using var response = await client.GetAsync(new Uri("api/drinks/" + Uri.EscapeDataString(drinkId) + "/image", UriKind.Relative),
+                cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var svg = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var match = PictureId().Match(svg);
+            var picture = match.Success ? match.Groups[1].Value : null;
+            _pictures[drinkId] = picture;
+            return picture;
+        }
+        catch (Exception error) when (error is HttpRequestException
+            || (error is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return null;
+        }
     }
+
+    private readonly ConcurrentDictionary<string, string?> _pictures = new(StringComparer.OrdinalIgnoreCase);
+
+    [GeneratedRegex("""<g\b[^>]*?\bid="([A-Za-z0-9_-]{1,64})"[^>]*>""", RegexOptions.CultureInvariant)]
+    private static partial Regex PictureId();
+
+    [GeneratedRegex("^#[0-9A-Fa-f]{6}$", RegexOptions.CultureInvariant)]
+    private static partial Regex HexColor();
+
+    /// <summary>The first property that holds a colour as <c>#rrggbb</c>. Anything else the machine says is left out.</summary>
+    private static string? ColorOf(JsonElement value, params string[] properties)
+        => properties.Select(p => Text(value, p)).FirstOrDefault(c => c is not null && HexColor().IsMatch(c))?.ToLowerInvariant();
+
+    /// <summary>
+    /// The colour the marketplace shows each ingredient in, by its id, as <c>#rrggbb</c>. Empty while the marketplace
+    /// of the machine is away.
+    /// </summary>
+    internal async Task<IReadOnlyDictionary<string, string>> ColorsAsync(CancellationToken cancellationToken)
+    {
+        using var components = await ComponentsAsync(cancellationToken).ConfigureAwait(false);
+        return ColorsOf(components);
+    }
+
+    private static Dictionary<string, string> ColorsOf(JsonDocument? components)
+    {
+        var colors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var component in Available(components))
+        {
+            if (Text(component, "id") is { } id && ColorOf(component, "displayColor", "color") is { } color)
+            {
+                colors[id] = color;
+            }
+        }
+
+        return colors;
+    }
+
+    private static IEnumerable<JsonElement> Available(JsonDocument? components)
+        => components is { RootElement.ValueKind: JsonValueKind.Object }
+            && components.RootElement.TryGetProperty("available", out var available) && available.ValueKind == JsonValueKind.Array
+                ? available.EnumerateArray()
+                : [];
 
     internal async Task<IReadOnlyList<Pump>> PumpsAsync(IReadOnlyDictionary<int, bool> warnings, CancellationToken cancellationToken)
+        => (await PumpsAndColorsAsync(warnings, cancellationToken).ConfigureAwait(false)).Pumps;
+
+    /// <summary>
+    /// The pumps with their ingredients, and the colour of each ingredient by its id, as <see cref="ColorsAsync"/> has
+    /// it: both from one read of the list of components.
+    /// </summary>
+    internal async Task<(IReadOnlyList<Pump> Pumps, IReadOnlyDictionary<string, string> Colors)> PumpsAndColorsAsync(
+        IReadOnlyDictionary<int, bool> warnings, CancellationToken cancellationToken)
     {
         using var pumps = await GetAsync("api/admin/pumps", cancellationToken).ConfigureAwait(false);
         using var amounts = await GetAsync("api/admin/pumps/standardAmount", cancellationToken).ConfigureAwait(false);
@@ -40,15 +126,11 @@ internal sealed class MixerClient(IHttpClientFactory clients, IOptions<JuiceBarO
         }
 
         var names = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        if (components is { RootElement.ValueKind: JsonValueKind.Object }
-            && components.RootElement.TryGetProperty("available", out var available) && available.ValueKind == JsonValueKind.Array)
+        foreach (var component in Available(components))
         {
-            foreach (var component in available.EnumerateArray())
+            if (Text(component, "id") is { } id)
             {
-                if (Text(component, "id") is { } id)
-                {
-                    names[id] = Text(component, "name");
-                }
+                names[id] = Text(component, "name");
             }
         }
 
@@ -71,7 +153,7 @@ internal sealed class MixerClient(IHttpClientFactory clients, IOptions<JuiceBarO
                 warnings.TryGetValue(number, out var warning) ? warning : null));
         }
 
-        return result;
+        return (result, ColorsOf(components));
     }
 
     // The machine takes the names of the ingredients from its marketplace. While that is away, the pumps are
@@ -151,7 +233,7 @@ internal sealed class MixerClient(IHttpClientFactory clients, IOptions<JuiceBarO
         }
     }
 
-    private static Drink? ToDrink(JsonElement drink)
+    private static Drink? ToDrink(JsonElement drink, IReadOnlyDictionary<string, string> colors)
     {
         if (Text(drink, "id") is not { } id || Text(drink, "title") is not { } title)
         {
@@ -159,9 +241,11 @@ internal sealed class MixerClient(IHttpClientFactory clients, IOptions<JuiceBarO
         }
 
         var components = drink.TryGetProperty("components", out var list) && list.ValueKind == JsonValueKind.Array
-            ? list.EnumerateArray().Where(c => Text(c, "id") is not null).Select(c => new DrinkComponent(Text(c, "id")!, Text(c, "name"))).ToArray()
+            ? list.EnumerateArray().Where(c => Text(c, "id") is not null)
+                .Select(c => new DrinkComponent(Text(c, "id")!, Text(c, "name"), colors.GetValueOrDefault(Text(c, "id")!)))
+                .ToArray()
             : [];
-        return new(id, title, Text(drink, "description"), components);
+        return new(id, title, Text(drink, "description"), components, ColorOf(drink, "backgroundColor"));
     }
 
     private static Order? ToOrder(JsonElement order)

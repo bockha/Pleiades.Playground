@@ -2,9 +2,9 @@ import { ENERGY_HOURS, ENERGY_SLOTS, ENERGY_UNITS, MOST_ENERGY_HOURS } from "@pl
 import { READING_PATHS, SILENT_AFTER_SECONDS } from "@pleiades/cards/machine/contract.ts"
 import type { EnergySeries, EnergyShow, MachineEnergy, MeterReading } from "@pleiades/cards/energy/contract.ts"
 
-import { listTopics, readNewest, readOldest, readStatistics, readThinned, readTimelines } from "./apis.ts"
+import { listTopics, readNewest, readStatistics, readTimelines } from "./apis.ts"
 import type { Apis, Newest, Statistics } from "./apis.ts"
-import { machineOf } from "./machines.ts"
+import { machineNamed, machineOf } from "./machines.ts"
 import { silences, silentBetween } from "./liveness.ts"
 import { slotEnds, slotted, sources, topicOf } from "./measurements.ts"
 import { secondsBefore } from "./time.ts"
@@ -130,13 +130,15 @@ export async function showEnergy(
   // A machine that stands still may send only its heartbeat, with a meter that does not change.
   const alive = machinesOf((machine, topic) => topic === heartbeatOf(machine)).filter((machine) => !measured.includes(machine))
   const known = [...measured, ...alive].sort()
-  const missing = (machines ?? []).filter((machine) => !known.includes(machine))
+  // A machine is named by its id or as people call it.
+  const named = machines?.map((name) => machineNamed(known, name))
+  const missing = (named ?? []).filter((machine) => !known.includes(machine))
   if (missing.length > 0) {
     throw new Error(
       `No machine ${missing.map((one) => `"${one}"`).join(", ")} published active power, its energy meter or a heartbeat in the last ${hours === 1 ? "hour" : `${hours} hours`}. Machines that did: ${known.join(", ") || "none"}.`,
     )
   }
-  const asked = machines === undefined ? known : [...new Set(machines)]
+  const asked = named === undefined ? known : [...new Set(named)]
 
   const shown = await Promise.all(
     asked.map(async (machine): Promise<MachineEnergy> => {
@@ -146,7 +148,7 @@ export async function showEnergy(
       // before a gap, in which the machine imported energy outside these hours: the meter is then
       // counted from its first value in them, as one that began in them.
       const before = newest !== null && (await heldAtStart(apis, machine, newest, from)) ? newest : null
-      const first = before === null && published.has(meter) ? await readOldest(apis, "baseUnitValues", meter, from, now) : null
+      const first = before === null && published.has(meter) ? await readNewest(apis, "baseUnitValues", meter, now, { from, sorting: "Ascending" }) : null
       const start = readingOf(before ?? first)
       const stop = readingOf(end)
       const unit = (stop ?? start)?.unit ?? null
@@ -191,11 +193,11 @@ export async function listEnergySeries(
   const [timelines, heartbeats] =
     machines === undefined
       ? await Promise.all([
-          readThinned(apis, `machines/*/${sources.activePower.path}`, from, to, slots * 2),
+          readTimelines(apis, "baseUnitValues", `machines/*/${sources.activePower.path}`, from, to, slots * 2),
           readTimelines(apis, "baseUnitValues", `machines/*/${READING_PATHS.heartbeat}`, beatsFrom, to),
         ])
       : await Promise.all([
-          Promise.all(machines.map((machine) => readThinned(apis, topicOf(machine, "activePower"), from, to, slots * 2))).then((all) => all.flat()),
+          Promise.all(machines.map((machine) => readTimelines(apis, "baseUnitValues", topicOf(machine, "activePower"), from, to, slots * 2))).then((all) => all.flat()),
           Promise.all(machines.map((machine) => readTimelines(apis, "baseUnitValues", heartbeatOf(machine), beatsFrom, to))).then((all) => all.flat()),
         ])
   const samplesOf = (machine: string) => timelines.find((one) => one.topic === topicOf(machine, "activePower"))
